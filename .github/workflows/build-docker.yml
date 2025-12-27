@@ -51,7 +51,7 @@ jobs:
         image: lionelschiepers/stockquote-node-api:github-latest
         sarif-file: report.sarif
         only-fixed: true
-        ignore-base: true
+        ignore-base: false
         only-severities: "critical,high,medium"
 
     - name: Docker Scout SBOM
