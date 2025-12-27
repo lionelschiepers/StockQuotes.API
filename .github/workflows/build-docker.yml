@@ -19,9 +19,35 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
 
-    - name: Build and push the Docker image
-      run: |
-        # IMAGE_TAG=${{ github.sha }}
-        IMAGE_TAG=github-latest
-        docker build . --file Dockerfile --tag lionelschiepers/stockquote-node-api:$IMAGE_TAG
-        docker push lionelschiepers/stockquote-node-api:$IMAGE_TAG
+#    - name: Build and push the Docker image
+#      run: |
+#        # IMAGE_TAG=${{ github.sha }}
+#        IMAGE_TAG=github-latest
+#        docker build . --file Dockerfile --tag lionelschiepers/stockquote-node-api:$IMAGE_TAG
+#        docker push lionelschiepers/stockquote-node-api:$IMAGE_TAG
+
+    - name: Build and Push Docker Image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        tags:  lionelschiepers/stockquote-node-api:github-latest
+        push: true
+
+    - name: Docker Scout Quickview and CVEs
+      uses: docker/scout-action@v1
+      with:
+        command: quickview,cves
+        image: lionelschiepers/stockquote-node-api:github-latest
+
+    - name: Docker Scout SBOM
+      uses: docker/scout-action@v1
+      with:
+        command: sbom
+        image: lionelschiepers/stockquote-node-api:github-latest
+        output: sbom.json
+
+    - name: Docker Scout Recommendations
+      uses: docker/scout-action@v1
+      with:
+        command: recommendations
+        image: lionelschiepers/stockquote-node-api:github-latest
