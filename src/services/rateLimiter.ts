@@ -12,7 +12,7 @@ class RateLimiter {
   constructor(windowMs: number = 60000, maxRequests: number = 100) {
     this.windowMs = windowMs;
     this.maxRequests = maxRequests;
-    
+
     // Clean up expired entries every minute
     setInterval(() => this.cleanup(), 60000);
   }
@@ -25,14 +25,14 @@ class RateLimiter {
       // New entry or expired window
       const newEntry: RateLimitEntry = {
         count: 1,
-        resetTime: now + this.windowMs
+        resetTime: now + this.windowMs,
       };
       this.requests.set(identifier, newEntry);
-      
+
       return {
         allowed: true,
         remaining: this.maxRequests - 1,
-        resetTime: newEntry.resetTime
+        resetTime: newEntry.resetTime,
       };
     }
 
@@ -41,7 +41,7 @@ class RateLimiter {
       return {
         allowed: false,
         remaining: 0,
-        resetTime: entry.resetTime
+        resetTime: entry.resetTime,
       };
     }
 
@@ -50,7 +50,7 @@ class RateLimiter {
     return {
       allowed: true,
       remaining: this.maxRequests - entry.count,
-      resetTime: entry.resetTime
+      resetTime: entry.resetTime,
     };
   }
 
@@ -66,4 +66,4 @@ class RateLimiter {
 
 // Export singleton instances with different limits
 export const apiRateLimiter = new RateLimiter(60000, 100); // 100 requests per minute
-export const strictRateLimiter = new RateLimiter(60000, 20);  // 20 requests per minute for heavy endpoints
+export const strictRateLimiter = new RateLimiter(60000, 20); // 20 requests per minute for heavy endpoints

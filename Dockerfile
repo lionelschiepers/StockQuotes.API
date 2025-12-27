@@ -35,7 +35,6 @@ RUN npm run build
 
 RUN npm prune --production
 
-
 # basic HTTP healthcheck for the functions host
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 	CMD curl -f http://localhost:80/api/exchange-rate-ecb || exit 1

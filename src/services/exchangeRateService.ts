@@ -1,5 +1,5 @@
-import axios from "axios";
-import { InvocationContext } from "@azure/functions";
+import axios from 'axios';
+import { InvocationContext } from '@azure/functions';
 
 export interface ExchangeRateResponse {
   data: string;
@@ -7,28 +7,29 @@ export interface ExchangeRateResponse {
 }
 
 export class ExchangeRateService {
-  private readonly ecbUrl = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
+  private readonly ecbUrl = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
 
   async getDailyRates(context: InvocationContext): Promise<ExchangeRateResponse> {
     try {
-      context.log("Fetching daily exchange rates from ECB");
+      context.log('Fetching daily exchange rates from ECB');
 
       const response = await axios.get<string>(this.ecbUrl, {
         timeout: 10000, // 10 second timeout
         headers: {
           'User-Agent': 'Azure-Function/1.0',
-          'Accept': 'application/xml,text/xml'
-        }
+          Accept: 'application/xml,text/xml',
+        },
       });
 
       context.log(`Successfully retrieved exchange rates. Status: ${response.status}`);
-      
+
       return {
         data: response.data,
-        contentType: response.headers["content-type"] || "application/xml"
+        contentType: response.headers['content-type'] || 'application/xml',
       };
-    } catch (error: any) {
-      context.error(`Error fetching exchange rates from ECB: ${error.message}`, error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      context.error(`Error fetching exchange rates from ECB: ${errorMessage}`, error);
       throw error;
     }
   }
