@@ -21,6 +21,7 @@ jobs:
 
     - name: Build and push the Docker image
       run: |
-        IMAGE_TAG=${{ github.sha }}
-        docker build . --file Dockerfile --tag stockquotes-api:$IMAGE_TAG
-        docker push stockquotes-api:$IMAGE_TAG
+        # IMAGE_TAG=${{ github.sha }}
+        IMAGE_TAG=github-latest
+        docker build . --file Dockerfile --tag lionelschiepers/stockquote-node-api:$IMAGE_TAG
+        docker push lionelschiepers/stockquote-node-api:$IMAGE_TAG
