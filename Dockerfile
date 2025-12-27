@@ -13,6 +13,8 @@ FROM mcr.microsoft.com/azure-functions/node:4-node24
 # Avoid running a full `apt-get upgrade` in the image to keep builds deterministic and small.
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
+RUN npm install -g npm@latest
+
 ENV AzureWebJobsScriptRoot=/home/site/wwwroot
 ENV AzureFunctionsJobHost__Logging__Console__IsEnabled=true
 # doesn't work as expected for an unknown reason, so added headers in the function code directly
