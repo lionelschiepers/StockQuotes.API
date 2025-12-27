@@ -44,7 +44,7 @@ jobs:
         command: quickview
         image: lionelschiepers/stockquote-node-api:github-latest
 
-    - name: Docker Scout CVEs
+    - name: Docker Scout CVEs with SARIF output
       uses: docker/scout-action@v1
       with:
         command: cves
