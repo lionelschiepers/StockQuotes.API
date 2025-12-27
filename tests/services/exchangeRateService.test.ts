@@ -67,10 +67,7 @@ describe('ExchangeRateService', () => {
       mockedAxios.get.mockRejectedValue(error);
 
       await expect(service.getDailyRates(mockContext)).rejects.toThrow('Network Error');
-      expect(mockContext.error).toHaveBeenCalledWith(
-        `Error fetching exchange rates from ECB: ${error.message}`,
-        error,
-      );
+      expect(mockContext.error).toHaveBeenCalledWith(`Error fetching exchange rates from ECB: ${error.message}`, error);
     });
   });
 
