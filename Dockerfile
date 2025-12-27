@@ -28,6 +28,9 @@ COPY --from=builder /home/site/wwwroot/dist ./dist
 COPY --from=builder /home/site/wwwroot/host.json ./
 COPY --from=builder /home/site/wwwroot/package.json ./
 
+# remove npm to address this security issue: https://medium.com/@balazs.csaba.diy/whats-this-glob-npm-madness-suddenly-every-node-js-image-is-vulnerable-but-why-1ba1b0cbad97
+RUN npm r -g npm
+
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 	CMD curl -f http://localhost:80/api/exchange-rate-ecb || exit 1
 
