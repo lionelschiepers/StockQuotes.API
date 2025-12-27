@@ -1,43 +1,33 @@
-# exposed on NAS with port 20002
-# sample url: 
-#   /api/yahoo-finance?symbols=MSFT&fields=regularMarketPrice
-#   /api/exchange-rate-ecb
-
-# To enable ssh & remote debugging on app service change the base image to the one below
-# FROM mcr.microsoft.com/azure-functions/node:4-node22-appservice
-FROM mcr.microsoft.com/azure-functions/node:4-node24
-
-# ENV NODE_ENV=production
-
-# Update package index and install a small HTTP client for healthchecks.
-# Avoid running a full `apt-get upgrade` in the image to keep builds deterministic and small.
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# Build stage
+FROM mcr.microsoft.com/azure-functions/node:4-node24 AS builder
 
 RUN npm install -g npm@latest
 
+WORKDIR /home/site/wwwroot
+
+COPY package*.json ./
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+COPY . .
+RUN npm run build
+RUN npm prune --omit=dev
+
+
+# Production stage
+FROM mcr.microsoft.com/azure-functions/node:4-node24
+
 ENV AzureWebJobsScriptRoot=/home/site/wwwroot
 ENV AzureFunctionsJobHost__Logging__Console__IsEnabled=true
-# doesn't work as expected for an unknown reason, so added headers in the function code directly
-# ENV CORS_ALLOWED_ORIGINS="[\"*\"]" 
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /home/site/wwwroot
 
-# copy both package.json and package-lock.json to leverage layer cache & reproducible installs
-COPY package*.json ./
+COPY --from=builder /home/site/wwwroot/node_modules ./node_modules
+COPY --from=builder /home/site/wwwroot/dist ./dist
+COPY --from=builder /home/site/wwwroot/host.json ./
+COPY --from=builder /home/site/wwwroot/package.json ./
 
-# prefer npm ci when a lockfile exists (faster, deterministic)
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
-# RUN npm audit fix
-
-# Copy the rest of the code
-COPY *.json .
-COPY ./src/ ./src/
-
-RUN npm run build
-
-RUN npm prune --omit=dev
-
-# basic HTTP healthcheck for the functions host
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 	CMD curl -f http://localhost:80/api/exchange-rate-ecb || exit 1
 
