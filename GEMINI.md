@@ -46,10 +46,18 @@ The functions will be available at the following endpoints:
 
 ### Testing
 
-There are currently no automated tests. To add tests, you would run:
+This project uses [Jest](https://jestjs.io/) for unit and integration testing. The tests are located in the `tests` directory and follow a similar structure to the `src` directory.
+
+To run the tests, use the following command:
 
 ```bash
 npm test
+```
+
+You can also run the tests in watch mode:
+
+```bash
+npm test -- --watch
 ```
 
 ## Development Conventions
@@ -58,4 +66,7 @@ npm test
 *   **Service-Oriented Architecture:** Business logic is separated into services, which are consumed by the Azure Functions.
 *   **Dependency Injection:** A simple dependency injection container is used to manage service instances.
 *   **Rate Limiting:** A custom in-memory rate limiter is used to protect the API from excessive requests.
-*   **Linting and Formatting:** The project should be set up with a linter and formatter (e.g., ESLint, Prettier) to ensure code consistency. (TODO: Add linting and formatting scripts to `package.json`).
+*   **Linting and Formatting:** The project is set up with ESLint and Prettier to ensure code consistency. You can run the linter and formatter with the following commands:
+    *   `npm run lint`
+    *   `npm run format`
+
