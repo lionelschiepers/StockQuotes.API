@@ -63,6 +63,11 @@ jobs:
         command: recommendations
         image: lionelschiepers/stockquote-node-api:github-latest
 
+    - name: Cat sarof
+      run: |
+        find . -name "sarif.output.json"
+        cat sarif.output.json
+
     - name: Upload Docker Scout SARIF Report
       uses: github/codeql-action/upload-sarif@v4
       with:
