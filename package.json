@@ -15,7 +15,14 @@
     "test": "jest",
     "clean": "rimraf dist",
     "lint": "eslint \"{src,tests}/**/*.ts\"",
-    "format": "prettier --write \"{src,tests}/**/*.ts\""
+    "format": "prettier --write \"{src,tests}/**/*.ts\"",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "{src,tests}/**/*.ts": [
+      "npm run lint",
+      "npm run format"
+    ]
   },
   "dependencies": {
     "@azure/functions": "^4.0.0",
@@ -31,7 +38,9 @@
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
+    "husky": "^9.1.7",
     "jest": "^30.2.0",
+    "lint-staged": "^16.2.7",
     "npm-run-all": "^4.1.5",
     "prettier": "^3.7.4",
     "rimraf": "^6.0.1",
