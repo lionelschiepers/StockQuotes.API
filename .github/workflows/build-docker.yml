@@ -63,6 +63,12 @@ jobs:
         command: recommendations
         image: lionelschiepers/stockquote-node-api:github-latest
 
+    - name: Publish SARIF report
+      uses: actions/upload-artifact@v4
+      with:
+        name: sarif-report
+        path: sarif.output.json
+
 #    - name: Cat sarif
 #      run: |
 #        find . -name "sarif.output.json"
