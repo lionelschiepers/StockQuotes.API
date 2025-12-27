@@ -35,7 +35,7 @@ COPY ./src/ ./src/
 
 RUN npm run build
 
-RUN npm prune --production
+RUN npm prune --omit=dev
 
 # basic HTTP healthcheck for the functions host
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
