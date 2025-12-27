@@ -50,7 +50,9 @@ jobs:
         command: cves
         image: lionelschiepers/stockquote-node-api:github-latest
         sarif-file: report.sarif
-        summary: true
+        only-fixed: true
+        ignore-base: true
+        only-severities: "critical,high,medium"
 
     - name: Docker Scout SBOM
       uses: docker/scout-action@v1
