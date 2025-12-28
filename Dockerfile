@@ -20,11 +20,14 @@ ENV AzureWebJobsScriptRoot=/home/site/wwwroot
 ENV AzureFunctionsJobHost__Logging__Console__IsEnabled=true
 
 # Security hardening - update packages and install only necessary tools
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+ RUN apt-get update && \
+     apt-get upgrade -y && \
+     apt-get install -y --no-install-recommends \
+     curl \
+     ca-certificates \
+     && rm -rf /var/lib/apt/lists/*
+# remove npm to address this security issue: https://medium.com/@balazs.csaba.diy/whats-this-glob-npm-madness-suddenly-every-node-js-image-is-vulnerable-but-why-1ba1b0cbad97
+RUN npm r -g npm
 
 # Create dedicated non-root user for security
 RUN useradd -m appuser && \
@@ -39,9 +42,6 @@ COPY --from=builder /home/site/wwwroot/node_modules ./node_modules
 COPY --from=builder /home/site/wwwroot/dist ./dist
 COPY --from=builder /home/site/wwwroot/host.json ./
 COPY --from=builder /home/site/wwwroot/package.json ./
-
-# remove npm to address this security issue: https://medium.com/@balazs.csaba.diy/whats-this-glob-npm-madness-suddenly-every-node-js-image-is-vulnerable-but-why-1ba1b0cbad97
-RUN npm r -g npm
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 	CMD curl -f http://localhost:80/api/exchange-rate-ecb || exit 1
