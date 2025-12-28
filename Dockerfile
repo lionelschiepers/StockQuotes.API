@@ -19,7 +19,19 @@ FROM mcr.microsoft.com/azure-functions/node:4-node24
 ENV AzureWebJobsScriptRoot=/home/site/wwwroot
 ENV AzureFunctionsJobHost__Logging__Console__IsEnabled=true
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# Security hardening - update packages and install only necessary tools
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create dedicated non-root user for security
+RUN useradd -m appuser && \
+    mkdir -p /home/site/wwwroot && \
+    chown appuser:appuser /home/site/wwwroot
+
+USER appuser
 
 WORKDIR /home/site/wwwroot
 
