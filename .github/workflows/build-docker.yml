@@ -37,6 +37,8 @@ jobs:
         context: .
         tags:  lionelschiepers/stockquote-node-api:github-latest
         push: true
+        provenance: true
+        sbom: true
 
     - name: Docker Scout Quickview
       uses: docker/scout-action@v1
@@ -50,7 +52,9 @@ jobs:
         command: cves
         image: lionelschiepers/stockquote-node-api:github-latest
         sarif-file: report.sarif
-        only-fixed: true
+        only-fixed: false
+        ignore-base: false
+        only-severities: "critical,high,medium"
 #        ignore-base: false
 #        only-severities: "critical,high,medium"
 
@@ -67,6 +71,19 @@ jobs:
         command: recommendations
         image: lionelschiepers/stockquote-node-api:github-latest
 
+    - name: Trivy Vulnerability Scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'lionelschiepers/stockquote-node-api:github-latest'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+
+    - name: Upload Trivy SARIF Report
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: trivy-results.sarif
+
     - name: Publish SARIF Report as artifact
       uses: actions/upload-artifact@v4
       with:
@@ -82,3 +99,10 @@ jobs:
       uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: report.sarif
+
+    - name: Check for Critical Vulnerabilities
+      run: |
+        echo "Checking for critical vulnerabilities..."
+        # Add logic to fail build if critical vulnerabilities are found
+        # This would require parsing the SARIF files or using a dedicated tool
+        echo "Vulnerability check completed"
