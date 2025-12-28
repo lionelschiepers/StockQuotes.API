@@ -52,7 +52,7 @@ jobs:
         sarif-file: report.sarif
         only-fixed: true
         ignore-base: false
-        only-severities: "critical,high,medium"
+#        only-severities: "critical,high,medium"
 
     - name: Docker Scout SBOM
       uses: docker/scout-action@v1
