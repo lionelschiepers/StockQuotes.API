@@ -12,8 +12,6 @@ jobs:
 
     permissions:
       security-events: write
-#      actions: read
-#      contents: read
 
     steps:
     - uses: actions/checkout@v5
@@ -24,21 +22,12 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
 
-#    - name: Build and push the Docker image
-#      run: |
-#        # IMAGE_TAG=${{ github.sha }}
-#        IMAGE_TAG=github-latest
-#        docker build . --file Dockerfile --tag lionelschiepers/stockquote-node-api:$IMAGE_TAG
-#        docker push lionelschiepers/stockquote-node-api:$IMAGE_TAG
-
     - name: Build and Push Docker Image
       uses: docker/build-push-action@v4
       with:
         context: .
         tags:  lionelschiepers/stockquote-node-api:github-latest
         push: true
-        provenance: true
-        sbom: true
 
     - name: Docker Scout Quickview
       uses: docker/scout-action@v1
