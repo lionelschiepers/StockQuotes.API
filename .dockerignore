@@ -1,5 +1,28 @@
+# Security files that should not be included
 local.settings.json
+*.env
+*.env.*
+*.secret
+*.key
+*.pem
+
+# Build artifacts
 node_modules
 dist
+
+# Development files
 .vscode
 .github
+.git
+.gitignore
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+
+# IDE and editor files
+.idea
+.vs
+*.suo
+*.user
