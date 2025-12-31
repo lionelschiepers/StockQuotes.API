@@ -1,3 +1,9 @@
+# exposed on NAS with port 20002
+# sample url: 
+#   /api/yahoo-finance?symbols=MSFT&fields=regularMarketPrice
+#   /api/exchange-rate-ecb
+
+
 # Build stage
 FROM mcr.microsoft.com/azure-functions/node:4-node24 AS builder
 
