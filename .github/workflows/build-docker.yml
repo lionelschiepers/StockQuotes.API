@@ -2,7 +2,10 @@ name: Build and Push Docker Image
 
 on:
   push:
-    branches: [ main ]
+    branches: 
+      - main
+      - 'features/**'
+
   pull_request:
     branches: [ main ]
 
@@ -18,12 +21,14 @@ jobs:
 
     - name: Login to Docker Hub
       uses: docker/login-action@v2
+      if: github.ref == 'refs/heads/main'
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
 
     - name: Build and Push Docker Image
       uses: docker/build-push-action@v4
+      if: github.ref == 'refs/heads/main'
       with:
         context: .
         tags:  lionelschiepers/stockquote-node-api:github-latest
@@ -31,12 +36,14 @@ jobs:
 
     - name: Docker Scout Quickview
       uses: docker/scout-action@v1
+      if: github.ref == 'refs/heads/main'
       with:
         command: quickview
         image: lionelschiepers/stockquote-node-api:github-latest
 
     - name: Docker Scout CVEs with SARIF output
       uses: docker/scout-action@v1
+      if: github.ref == 'refs/heads/main'
       with:
         command: cves
         image: lionelschiepers/stockquote-node-api:github-latest
@@ -47,6 +54,7 @@ jobs:
 
     - name: Docker Scout SBOM
       uses: docker/scout-action@v1
+      if: github.ref == 'refs/heads/main'
       with:
         command: sbom
         image: lionelschiepers/stockquote-node-api:github-latest
@@ -54,12 +62,14 @@ jobs:
 
     - name: Docker Scout Recommendations
       uses: docker/scout-action@v1
+      if: github.ref == 'refs/heads/main'
       with:
         command: recommendations
         image: lionelschiepers/stockquote-node-api:github-latest
 
     - name: Trivy Vulnerability Scanner
       uses: aquasecurity/trivy-action@master
+      if: github.ref == 'refs/heads/main'
       with:
         image-ref: 'lionelschiepers/stockquote-node-api:github-latest'
         format: 'sarif'
@@ -68,11 +78,13 @@ jobs:
 
     - name: Upload Trivy SARIF Report
       uses: github/codeql-action/upload-sarif@v4
+      if: github.ref == 'refs/heads/main'
       with:
         sarif_file: trivy-results.sarif
 
     - name: Publish SARIF Report as artifact
       uses: actions/upload-artifact@v4
+      if: github.ref == 'refs/heads/main'
       with:
         name: sarif-report
         path: report.sarif
@@ -84,10 +96,12 @@ jobs:
 
     - name: Upload Docker Scout SARIF Report
       uses: github/codeql-action/upload-sarif@v4
+      if: github.ref == 'refs/heads/main'
       with:
         sarif_file: report.sarif
 
     - name: Check for Critical Vulnerabilities
+      if: github.ref == 'refs/heads/main'
       run: |
         echo "Checking for critical vulnerabilities..."
         # Add logic to fail build if critical vulnerabilities are found
