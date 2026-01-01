@@ -70,3 +70,9 @@ npm test -- --watch
     *   `npm run lint`
     *   `npm run format`
 
+# Rules
+- The project is scanned with sonarqube
+- The application is developped on windows os
+- Validate every fix with npm run lint
+- Validate every fix with npm run format
+- Validate every fix with npm run build
