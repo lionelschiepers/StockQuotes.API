@@ -16,7 +16,17 @@ export class YahooFinanceService {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(yahooFinance?: any) {
-    this.yahooFinance = yahooFinance || new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    this.yahooFinance =
+      yahooFinance ||
+      new YahooFinance({
+        suppressNotices: ['yahooSurvey'] ,
+        fetchOptions: {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+          },
+        },
+      });
   }
 
   async getQuotes(request: YahooFinanceQuoteRequest, context: InvocationContext): Promise<YahooFinanceResponse> {
