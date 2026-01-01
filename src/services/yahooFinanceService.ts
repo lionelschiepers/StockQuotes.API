@@ -19,7 +19,7 @@ export class YahooFinanceService {
     this.yahooFinance =
       yahooFinance ||
       new YahooFinance({
-        suppressNotices: ['yahooSurvey'] ,
+        suppressNotices: ['yahooSurvey'],
         fetchOptions: {
           headers: {
             'User-Agent':
