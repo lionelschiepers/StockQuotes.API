@@ -22,6 +22,8 @@ This API serves as a dedicated backend for the [StockQuotes.React](https://githu
 *   **Clean Architecture:** Follows a service-oriented architecture, making it easy to understand and extend.
 *   **Fully Tested:** Comes with a comprehensive test suite using Jest.
 *   **Modern Tooling:** Uses ESLint and Prettier for consistent code quality.
+*   **Automated Docker Builds:** Docker images are automatically built and published.
+*   **Vulnerability Scanning:** Published Docker containers are scanned for security vulnerabilities.
 
 ## 🛠️ Getting Started
 
