@@ -5,7 +5,7 @@ interface RateLimitEntry {
 }
 
 class RateLimiter {
-  private requests: Map<string, RateLimitEntry> = new Map();
+  private readonly requests: Map<string, RateLimitEntry> = new Map();
   private readonly windowMs: number;
   private readonly maxRequests: number;
 

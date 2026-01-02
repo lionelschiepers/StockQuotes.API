@@ -15,9 +15,8 @@ COPY package*.json ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 COPY . .
-RUN npm run build
-RUN npm prune --omit=dev
-
+RUN npm run build && \
+    npm prune --omit=dev
 
 # Production stage
 FROM mcr.microsoft.com/azure-functions/node:4-node24

@@ -12,7 +12,7 @@ export interface YahooFinanceResponse {
 
 export class YahooFinanceService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private yahooFinance: any;
+  private readonly yahooFinance: any;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(yahooFinance?: any) {

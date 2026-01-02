@@ -90,14 +90,14 @@ describe('YahooFinanceService', () => {
     });
 
     it('should return isValid: false if more than 50 symbols are provided', () => {
-      const symbols = Array(51).fill('AAPL');
+      const symbols = new Array(51).fill('AAPL');
       const result = service.validateQuoteRequest(symbols, ['regularMarketPrice']);
       expect(result.isValid).toBe(false);
       expect(result.error).toBe('Maximum 50 symbols allowed per request');
     });
 
     it('should return isValid: false if more than 20 fields are provided', () => {
-      const fields = Array(21).fill('regularMarketPrice');
+      const fields = new Array(21).fill('regularMarketPrice');
       const result = service.validateQuoteRequest(['AAPL'], fields);
       expect(result.isValid).toBe(false);
       expect(result.error).toBe('Maximum 20 fields allowed per request');
