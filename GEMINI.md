@@ -76,4 +76,5 @@ npm test -- --watch
 - Validate every fix with npm run lint
 - Validate every fix with npm run format
 - Validate every fix with npm run build
+- Validate every fix with npm test
 - Don't automatically update GIT
