@@ -5,14 +5,14 @@
 [![Azure Functions](https://img.shields.io/badge/azure_functions-%230062AD.svg?style=for-the-badge&logo=azure-functions&logoColor=white)](https://azure.microsoft.com/en-us/services/functions/)
 [![Jest](https://img.shields.io/badge/-jest-%23C21325?style=for-the-badge&logo=jest&logoColor=white)](https://jestjs.io/)
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=for-the-badge)](https://github.com/your-username/your-repo/actions)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=for-the-badge)](https://github.com/LionelSCHIEPERS/StockQuotes.API/actions)
 [![Code Coverage](https://codecov.io/github/lionelschiepers/StockQuotes.API/graph/badge.svg?token=LSBAP0SV2Z)](https://codecov.io/github/lionelschiepers/StockQuotes.API)
 
-This project is the powerhouse behind the [StockQuotes.React](https://github.com/your-username/StockQuotes.React) application, providing real-time financial data through a robust and scalable API. If you're looking for a modern, well-structured, and easy-to-contribute-to financial data API, you've come to the right place!
+This project is the powerhouse behind the [StockQuotes.React](https://github.com/LionelSCHIEPERS/StockQuotes.React) application, providing real-time financial data through a robust and scalable API. If you're looking for a modern, well-structured, and easy-to-contribute-to financial data API, you've come to the right place!
 
 ## 🚀 Project Overview
 
-This API serves as a dedicated backend for the [StockQuotes.React](https://github.com/your-username/StockQuotes.React) frontend, delivering up-to-date stock prices and exchange rates. It's built with TypeScript and Azure Functions, ensuring a scalable and maintainable codebase.
+This API serves as a dedicated backend for the [StockQuotes.React](https://github.com/LionelSCHIEPERS/StockQuotes.React) frontend, delivering up-to-date stock prices and exchange rates. It's built with TypeScript and Azure Functions, ensuring a scalable and maintainable codebase.
 
 ### ✨ Features
 
@@ -36,11 +36,11 @@ This API serves as a dedicated backend for the [StockQuotes.React](https://githu
 
 1.  Clone this repository:
     ```bash
-    git clone https://github.com/your-username/your-repo.git
+    git clone https://github.com/LionelSCHIEPERS/StockQuotes.API.git
     ```
 2.  Navigate to the project directory:
     ```bash
-    cd your-repo
+    cd StockQuotes.API
     ```
 3.  Install the dependencies:
     ```bash
