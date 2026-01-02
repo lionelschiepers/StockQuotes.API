@@ -27,12 +27,9 @@ ENV AzureFunctionsJobHost__Logging__Console__IsEnabled=true
 # Security hardening - update packages and install only necessary tools
  RUN apt-get update && \
      apt-get upgrade -y && \
-     apt-get install -y --no-install-recommends \
-     curl \
-     ca-certificates \
-     && rm -rf /var/lib/apt/lists/*
-# remove npm to address this security issue: https://medium.com/@balazs.csaba.diy/whats-this-glob-npm-madness-suddenly-every-node-js-image-is-vulnerable-but-why-1ba1b0cbad97
-RUN npm r -g npm
+     apt-get install -y --no-install-recommends curl ca-certificates && \
+     rm -rf /var/lib/apt/lists/* && \
+     npm r -g npm
 
 # Create dedicated non-root user for security
 RUN useradd -m appuser && \
