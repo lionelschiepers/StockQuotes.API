@@ -2,7 +2,7 @@
 # sample url: 
 #   /api/yahoo-finance?symbols=MSFT&fields=regularMarketPrice
 #   /api/exchange-rate-ecb
-
+#   /api/statements?ticker=MSFT
 
 # Build stage
 FROM mcr.microsoft.com/azure-functions/node:4-node24 AS builder

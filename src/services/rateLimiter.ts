@@ -14,7 +14,8 @@ class RateLimiter {
     this.maxRequests = maxRequests;
 
     // Clean up expired entries every minute
-    setInterval(() => this.cleanup(), 60000);
+    const cleanupInterval = setInterval(() => this.cleanup(), 60000);
+    cleanupInterval.unref();
   }
 
   isAllowed(identifier: string): { allowed: boolean; remaining: number; resetTime: number } {
