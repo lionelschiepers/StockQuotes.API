@@ -381,7 +381,87 @@ describe('statementsHandler', () => {
       await statementsHandler(request, mockContext);
 
       // The service should receive the ticker (normalization happens in service)
-      expect(mockAlphaVantageService.getFinancialStatements).toHaveBeenCalledWith('ibm', mockContext);
+      expect(mockAlphaVantageService.getFinancialStatements).toHaveBeenCalledWith('ibm', null, undefined, mockContext);
+    });
+  });
+
+  describe('limitStatements parameter', () => {
+    it('should return 400 for invalid limitStatements (negative)', async () => {
+      mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
+
+      const request = mockRequest({ ticker: 'IBM', limitStatements: '-1' });
+      const response = await statementsHandler(request, mockContext);
+
+      expect(response.status).toBe(400);
+      expect(response.jsonBody).toMatchObject({
+        error: 'Invalid parameter: limitStatements',
+      });
+    });
+
+    it('should return 400 for invalid limitStatements (zero)', async () => {
+      mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
+
+      const request = mockRequest({ ticker: 'IBM', limitStatements: '0' });
+      const response = await statementsHandler(request, mockContext);
+
+      expect(response.status).toBe(400);
+      expect(response.jsonBody).toMatchObject({
+        error: 'Invalid parameter: limitStatements',
+      });
+    });
+
+    it('should return 400 for invalid limitStatements (too large)', async () => {
+      mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
+
+      const request = mockRequest({ ticker: 'IBM', limitStatements: '101' });
+      const response = await statementsHandler(request, mockContext);
+
+      expect(response.status).toBe(400);
+      expect(response.jsonBody).toMatchObject({
+        error: 'Invalid parameter: limitStatements',
+      });
+    });
+
+    it('should return 400 for invalid limitStatements (non-numeric)', async () => {
+      mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
+
+      const request = mockRequest({ ticker: 'IBM', limitStatements: 'abc' });
+      const response = await statementsHandler(request, mockContext);
+
+      expect(response.status).toBe(400);
+      expect(response.jsonBody).toMatchObject({
+        error: 'Invalid parameter: limitStatements',
+      });
+    });
+
+    it('should pass limitStatements to service when valid', async () => {
+      mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
+      mockAlphaVantageService.getFinancialStatements.mockResolvedValue({
+        symbol: 'IBM',
+        annualReports: [],
+        quarterlyReports: [],
+        cacheStatus: 'MISS',
+      });
+
+      const request = mockRequest({ ticker: 'IBM', limitStatements: '4' });
+      await statementsHandler(request, mockContext);
+
+      expect(mockAlphaVantageService.getFinancialStatements).toHaveBeenCalledWith('IBM', null, 4, mockContext);
+    });
+
+    it('should work with both period and limitStatements', async () => {
+      mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
+      mockAlphaVantageService.getFinancialStatements.mockResolvedValue({
+        symbol: 'IBM',
+        annualReports: [],
+        quarterlyReports: [],
+        cacheStatus: 'MISS',
+      });
+
+      const request = mockRequest({ ticker: 'IBM', period: 'yearly', limitStatements: '4' });
+      await statementsHandler(request, mockContext);
+
+      expect(mockAlphaVantageService.getFinancialStatements).toHaveBeenCalledWith('IBM', 'yearly', 4, mockContext);
     });
   });
 });

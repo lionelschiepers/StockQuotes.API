@@ -106,7 +106,7 @@ describe('AlphaVantageService', () => {
       mockedAxios.get.mockResolvedValueOnce({ data: mockBalanceSheet });
       mockedAxios.get.mockResolvedValueOnce({ data: mockCashFlow });
 
-      const result = await service.getFinancialStatements('IBM', mockContext);
+      const result = await service.getFinancialStatements('IBM', undefined, undefined, mockContext);
 
       expect(result.symbol).toBe('IBM');
       expect(result.cacheStatus).toBe('MISS');
@@ -128,10 +128,10 @@ describe('AlphaVantageService', () => {
         .mockResolvedValueOnce({ data: mockBalanceSheet })
         .mockResolvedValueOnce({ data: mockCashFlow });
 
-      await service.getFinancialStatements('IBM', mockContext);
+      await service.getFinancialStatements('IBM', undefined, undefined, mockContext);
 
       // Second call - should use cache
-      const result = await service.getFinancialStatements('IBM', mockContext);
+      const result = await service.getFinancialStatements('IBM', undefined, undefined, mockContext);
 
       // axios should only have been called 3 times total (not 6)
       expect(mockedAxios.get).toHaveBeenCalledTimes(3);
@@ -144,7 +144,7 @@ describe('AlphaVantageService', () => {
         .mockResolvedValueOnce({ data: { ...mockBalanceSheet, symbol: 'ibm' } })
         .mockResolvedValueOnce({ data: { ...mockCashFlow, symbol: 'ibm' } });
 
-      const result = await service.getFinancialStatements('ibm', mockContext);
+      const result = await service.getFinancialStatements('ibm', undefined, undefined, mockContext);
 
       expect(result.symbol).toBe('IBM');
     });
@@ -176,7 +176,7 @@ describe('AlphaVantageService', () => {
         .mockResolvedValueOnce({ data: partialBalance })
         .mockResolvedValueOnce({ data: partialCashFlow });
 
-      const result = await service.getFinancialStatements('IBM', mockContext);
+      const result = await service.getFinancialStatements('IBM', undefined, undefined, mockContext);
 
       expect(result.annualReports).toHaveLength(2);
 
@@ -229,7 +229,7 @@ describe('AlphaVantageService', () => {
         .mockResolvedValueOnce({ data: unsortedBalance })
         .mockResolvedValueOnce({ data: unsortedCashFlow });
 
-      const result = await service.getFinancialStatements('IBM', mockContext);
+      const result = await service.getFinancialStatements('IBM', undefined, undefined, mockContext);
 
       expect(result.annualReports[0].fiscalDateEnding).toBe('2023-12-31');
       expect(result.annualReports[1].fiscalDateEnding).toBe('2022-12-31');
@@ -240,13 +240,15 @@ describe('AlphaVantageService', () => {
       delete process.env.ALPHAVANTAGE_API_KEY;
       service = new AlphaVantageService(mockCache);
 
-      await expect(service.getFinancialStatements('IBM', mockContext)).rejects.toThrow(
+      await expect(service.getFinancialStatements('IBM', undefined, undefined, mockContext)).rejects.toThrow(
         'ALPHAVANTAGE_API_KEY environment variable is not set',
       );
     });
 
     it('should throw error on invalid ticker', async () => {
-      await expect(service.getFinancialStatements('', mockContext)).rejects.toThrow('Ticker symbol is required');
+      await expect(service.getFinancialStatements('', undefined, undefined, mockContext)).rejects.toThrow(
+        'Ticker symbol is required',
+      );
     });
 
     it('should throw error on rate limit response', async () => {
@@ -254,7 +256,7 @@ describe('AlphaVantageService', () => {
         data: { Note: 'API call frequency exceeded' },
       });
 
-      await expect(service.getFinancialStatements('IBM', mockContext)).rejects.toThrow(
+      await expect(service.getFinancialStatements('IBM', undefined, undefined, mockContext)).rejects.toThrow(
         'Alpha Vantage API rate limit reached',
       );
     });
@@ -264,7 +266,7 @@ describe('AlphaVantageService', () => {
         data: { Information: 'Invalid API call' },
       });
 
-      await expect(service.getFinancialStatements('IBM', mockContext)).rejects.toThrow(
+      await expect(service.getFinancialStatements('IBM', undefined, undefined, mockContext)).rejects.toThrow(
         'Alpha Vantage API error: Invalid API call',
       );
     });
@@ -275,7 +277,7 @@ describe('AlphaVantageService', () => {
       mockedAxios.get.mockRejectedValueOnce(error);
       mockedAxios.isAxiosError.mockReturnValueOnce(true);
 
-      await expect(service.getFinancialStatements('IBM', mockContext)).rejects.toThrow(
+      await expect(service.getFinancialStatements('IBM', undefined, undefined, mockContext)).rejects.toThrow(
         'Timeout fetching INCOME_STATEMENT for IBM',
       );
     });
@@ -286,7 +288,7 @@ describe('AlphaVantageService', () => {
       mockedAxios.get.mockRejectedValueOnce(error);
       mockedAxios.isAxiosError.mockReturnValueOnce(true);
 
-      await expect(service.getFinancialStatements('IBM', mockContext)).rejects.toThrow(
+      await expect(service.getFinancialStatements('IBM', undefined, undefined, mockContext)).rejects.toThrow(
         'Timeout fetching INCOME_STATEMENT for IBM',
       );
     });
@@ -299,9 +301,156 @@ describe('AlphaVantageService', () => {
 
       mockedAxios.isAxiosError.mockReturnValueOnce(true);
 
-      await expect(service.getFinancialStatements('IBM', mockContext)).rejects.toThrow(
+      await expect(service.getFinancialStatements('IBM', undefined, undefined, mockContext)).rejects.toThrow(
         'Alpha Vantage API error for INCOME_STATEMENT: 500 - Internal Server Error',
       );
+    });
+
+    describe('limitStatements', () => {
+      const mockIncomeStatementLimit = {
+        symbol: 'IBM',
+        annualReports: [
+          { fiscalDateEnding: '2023-12-31', totalRevenue: '1000000' },
+          { fiscalDateEnding: '2022-12-31', totalRevenue: '900000' },
+          { fiscalDateEnding: '2021-12-31', totalRevenue: '800000' },
+          { fiscalDateEnding: '2020-12-31', totalRevenue: '700000' },
+          { fiscalDateEnding: '2019-12-31', totalRevenue: '600000' },
+        ],
+        quarterlyReports: [
+          { fiscalDateEnding: '2024-03-31', totalRevenue: '250000' },
+          { fiscalDateEnding: '2023-12-31', totalRevenue: '240000' },
+          { fiscalDateEnding: '2023-09-30', totalRevenue: '230000' },
+          { fiscalDateEnding: '2023-06-30', totalRevenue: '220000' },
+          { fiscalDateEnding: '2023-03-31', totalRevenue: '210000' },
+        ],
+      };
+
+      const mockBalanceSheetLimit = {
+        symbol: 'IBM',
+        annualReports: [
+          { fiscalDateEnding: '2023-12-31', totalAssets: '5000000' },
+          { fiscalDateEnding: '2022-12-31', totalAssets: '4500000' },
+          { fiscalDateEnding: '2021-12-31', totalAssets: '4000000' },
+          { fiscalDateEnding: '2020-12-31', totalAssets: '3500000' },
+          { fiscalDateEnding: '2019-12-31', totalAssets: '3000000' },
+        ],
+        quarterlyReports: [
+          { fiscalDateEnding: '2024-03-31', totalAssets: '5200000' },
+          { fiscalDateEnding: '2023-12-31', totalAssets: '5100000' },
+          { fiscalDateEnding: '2023-09-30', totalAssets: '5050000' },
+          { fiscalDateEnding: '2023-06-30', totalAssets: '5000000' },
+          { fiscalDateEnding: '2023-03-31', totalAssets: '4950000' },
+        ],
+      };
+
+      const mockCashFlowLimit = {
+        symbol: 'IBM',
+        annualReports: [
+          { fiscalDateEnding: '2023-12-31', operatingCashflow: '150000' },
+          { fiscalDateEnding: '2022-12-31', operatingCashflow: '140000' },
+          { fiscalDateEnding: '2021-12-31', operatingCashflow: '130000' },
+          { fiscalDateEnding: '2020-12-31', operatingCashflow: '120000' },
+          { fiscalDateEnding: '2019-12-31', operatingCashflow: '110000' },
+        ],
+        quarterlyReports: [
+          { fiscalDateEnding: '2024-03-31', operatingCashflow: '40000' },
+          { fiscalDateEnding: '2023-12-31', operatingCashflow: '38000' },
+          { fiscalDateEnding: '2023-09-30', operatingCashflow: '36000' },
+          { fiscalDateEnding: '2023-06-30', operatingCashflow: '34000' },
+          { fiscalDateEnding: '2023-03-31', operatingCashflow: '32000' },
+        ],
+      };
+
+      it('should limit statements to specified count for both periods', async () => {
+        mockedAxios.get
+          .mockResolvedValueOnce({ data: mockIncomeStatementLimit })
+          .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
+          .mockResolvedValueOnce({ data: mockCashFlowLimit });
+
+        const result = await service.getFinancialStatements('IBM', undefined, 3, mockContext);
+
+        expect(result.annualReports).toHaveLength(3);
+        expect(result.quarterlyReports).toHaveLength(3);
+        // Should be the most recent dates (sorted descending)
+        expect(result.annualReports[0].fiscalDateEnding).toBe('2023-12-31');
+        expect(result.annualReports[1].fiscalDateEnding).toBe('2022-12-31');
+        expect(result.annualReports[2].fiscalDateEnding).toBe('2021-12-31');
+        expect(result.quarterlyReports[0].fiscalDateEnding).toBe('2024-03-31');
+        expect(result.quarterlyReports[1].fiscalDateEnding).toBe('2023-12-31');
+        expect(result.quarterlyReports[2].fiscalDateEnding).toBe('2023-09-30');
+      });
+
+      it('should limit only yearly reports when period=yearly', async () => {
+        mockedAxios.get
+          .mockResolvedValueOnce({ data: mockIncomeStatementLimit })
+          .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
+          .mockResolvedValueOnce({ data: mockCashFlowLimit });
+
+        const result = await service.getFinancialStatements('IBM', 'yearly', 2, mockContext);
+
+        expect(result.annualReports).toHaveLength(2);
+        expect(result.quarterlyReports).toHaveLength(0);
+        expect(result.annualReports[0].fiscalDateEnding).toBe('2023-12-31');
+        expect(result.annualReports[1].fiscalDateEnding).toBe('2022-12-31');
+      });
+
+      it('should limit only quarterly reports when period=quarterly', async () => {
+        mockedAxios.get
+          .mockResolvedValueOnce({ data: mockIncomeStatementLimit })
+          .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
+          .mockResolvedValueOnce({ data: mockCashFlowLimit });
+
+        const result = await service.getFinancialStatements('IBM', 'quarterly', 4, mockContext);
+
+        expect(result.annualReports).toHaveLength(0);
+        expect(result.quarterlyReports).toHaveLength(4);
+        expect(result.quarterlyReports[0].fiscalDateEnding).toBe('2024-03-31');
+        expect(result.quarterlyReports[3].fiscalDateEnding).toBe('2023-06-30');
+      });
+
+      it('should return all statements when limit exceeds available count', async () => {
+        mockedAxios.get
+          .mockResolvedValueOnce({ data: mockIncomeStatementLimit })
+          .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
+          .mockResolvedValueOnce({ data: mockCashFlowLimit });
+
+        const result = await service.getFinancialStatements('IBM', undefined, 100, mockContext);
+
+        expect(result.annualReports).toHaveLength(5);
+        expect(result.quarterlyReports).toHaveLength(5);
+      });
+
+      it('should return all statements when limitStatements is not provided', async () => {
+        mockedAxios.get
+          .mockResolvedValueOnce({ data: mockIncomeStatementLimit })
+          .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
+          .mockResolvedValueOnce({ data: mockCashFlowLimit });
+
+        const result = await service.getFinancialStatements('IBM', undefined, undefined, mockContext);
+
+        expect(result.annualReports).toHaveLength(5);
+        expect(result.quarterlyReports).toHaveLength(5);
+      });
+
+      it('should use different cache keys for different limits', async () => {
+        mockedAxios.get
+          .mockResolvedValueOnce({ data: mockIncomeStatementLimit })
+          .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
+          .mockResolvedValueOnce({ data: mockCashFlowLimit })
+          .mockResolvedValueOnce({ data: mockIncomeStatementLimit })
+          .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
+          .mockResolvedValueOnce({ data: mockCashFlowLimit });
+
+        // First call with limit 2
+        await service.getFinancialStatements('IBM', undefined, 2, mockContext);
+
+        // Second call with limit 4 - should fetch new data (cache miss)
+        const result = await service.getFinancialStatements('IBM', undefined, 4, mockContext);
+
+        // axios should have been called 6 times total (not 3)
+        expect(mockedAxios.get).toHaveBeenCalledTimes(6);
+        expect(result.annualReports).toHaveLength(4);
+      });
     });
   });
 

@@ -41,7 +41,12 @@ export class AlphaVantageService {
     this.cache = cache;
   }
 
-  async getFinancialStatements(ticker: string, context: InvocationContext): Promise<FinancialStatementsResponse> {
+  async getFinancialStatements(
+    ticker: string,
+    period: 'yearly' | 'quarterly' | undefined,
+    limitStatements: number | undefined,
+    context: InvocationContext,
+  ): Promise<FinancialStatementsResponse> {
     // Normalize ticker
     const normalizedTicker = ticker.toUpperCase().trim();
 
@@ -51,24 +56,91 @@ export class AlphaVantageService {
       throw new Error(validation.error);
     }
 
-    // Check cache first
-    const cacheKey = `statements:${normalizedTicker}`;
+    // Check cache first - include period and limit in cache key
+    const cacheKey = this.buildCacheKey(normalizedTicker, period, limitStatements);
     const cachedData = this.cache.get<FinancialStatementsResponse>(cacheKey);
 
     if (cachedData) {
-      context.log(`Cache hit for ${normalizedTicker}`);
+      context.log(
+        `Cache hit for ${normalizedTicker}${period ? ` (${period})` : ''}${limitStatements ? ` (limit:${limitStatements})` : ''}`,
+      );
       return { ...cachedData, cacheStatus: 'HIT' };
     }
 
-    context.log(`Cache miss for ${normalizedTicker}, fetching from API`);
+    context.log(
+      `Cache miss for ${normalizedTicker}${period ? ` (${period})` : ''}${limitStatements ? ` (limit:${limitStatements})` : ''}, fetching from API`,
+    );
 
-    // Fetch from API
+    // Fetch from API (without limit - we want full data in cache for flexibility)
     const data = await this.fetchFromApi(normalizedTicker, context);
 
-    // Store in cache
-    this.cache.set(cacheKey, data);
+    // Filter data based on period
+    const filteredData = this.filterByPeriod(data, period);
 
-    return { ...data, cacheStatus: 'MISS' };
+    // Apply statement limit
+    const limitedData = this.applyStatementLimit(filteredData, limitStatements);
+
+    // Store in cache
+    this.cache.set(cacheKey, limitedData);
+
+    return { ...limitedData, cacheStatus: 'MISS' };
+  }
+
+  private buildCacheKey(
+    ticker: string,
+    period: 'yearly' | 'quarterly' | undefined,
+    limitStatements: number | undefined,
+  ): string {
+    const parts = ['statements', ticker];
+    if (period) parts.push(period);
+    if (limitStatements) parts.push(`limit${limitStatements}`);
+    return parts.join(':');
+  }
+
+  private applyStatementLimit(
+    data: Omit<FinancialStatementsResponse, 'cacheStatus'>,
+    limitStatements: number | undefined,
+  ): Omit<FinancialStatementsResponse, 'cacheStatus'> {
+    if (!limitStatements) {
+      return data;
+    }
+
+    return {
+      symbol: data.symbol,
+      annualReports: data.annualReports.slice(0, limitStatements),
+      quarterlyReports: data.quarterlyReports.slice(0, limitStatements),
+    };
+  }
+
+  private filterByPeriod(
+    data: Omit<FinancialStatementsResponse, 'cacheStatus'>,
+    period: 'yearly' | 'quarterly' | undefined,
+  ): Omit<FinancialStatementsResponse, 'cacheStatus'> {
+    if (!period) {
+      return data;
+    }
+
+    if (period === 'yearly') {
+      return {
+        symbol: data.symbol,
+        annualReports: data.annualReports,
+        quarterlyReports: [],
+      };
+    }
+
+    if (period === 'quarterly') {
+      return {
+        symbol: data.symbol,
+        annualReports: [],
+        quarterlyReports: data.quarterlyReports,
+      };
+    }
+
+    return data;
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private async fetchFromApi(
@@ -82,12 +154,17 @@ export class AlphaVantageService {
     }
 
     try {
-      // Make parallel requests to all three endpoints
-      const [incomeResponse, balanceResponse, cashFlowResponse] = await Promise.all([
-        this.fetchStatement(ticker, 'INCOME_STATEMENT', context),
-        this.fetchStatement(ticker, 'BALANCE_SHEET', context),
-        this.fetchStatement(ticker, 'CASH_FLOW', context),
-      ]);
+      // Free tier Alpha Vantage API limit: 2 requests per second
+      // Make sequential requests with delay to respect rate limit
+      const incomeResponse = await this.fetchStatement(ticker, 'INCOME_STATEMENT', context);
+
+      // Wait 600ms before next request (stays under 2 req/sec limit)
+      await this.delay(600);
+      const balanceResponse = await this.fetchStatement(ticker, 'BALANCE_SHEET', context);
+
+      // Wait 600ms before next request
+      await this.delay(600);
+      const cashFlowResponse = await this.fetchStatement(ticker, 'CASH_FLOW', context);
 
       // Validate responses
       if (!this.isValidResponse(incomeResponse)) {

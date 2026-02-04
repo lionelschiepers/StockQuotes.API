@@ -47,6 +47,47 @@ export async function statementsHandler(request: HttpRequest, context: Invocatio
       };
     }
 
+    // Extract and validate period parameter
+    const period = request.query.get('period');
+    const validPeriods = ['yearly', 'quarterly'];
+
+    if (period && !validPeriods.includes(period)) {
+      return {
+        status: 400,
+        jsonBody: {
+          error: 'Invalid parameter: period',
+          message: 'Period must be either "yearly" or "quarterly". If not specified, both periods are returned.',
+        },
+        headers: {
+          'X-RateLimit-Limit': '100',
+          'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
+          'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
+        },
+      };
+    }
+
+    // Extract and validate limitStatements parameter
+    const limitStatementsParam = request.query.get('limitStatements');
+    let limitStatements: number | undefined;
+
+    if (limitStatementsParam) {
+      limitStatements = parseInt(limitStatementsParam, 10);
+      if (isNaN(limitStatements) || limitStatements < 1 || limitStatements > 100) {
+        return {
+          status: 400,
+          jsonBody: {
+            error: 'Invalid parameter: limitStatements',
+            message: 'limitStatements must be a positive integer between 1 and 100.',
+          },
+          headers: {
+            'X-RateLimit-Limit': '100',
+            'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
+            'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
+          },
+        };
+      }
+    }
+
     // Get services from container
     const { alphaVantageService } = getServiceContainer();
 
@@ -67,17 +108,31 @@ export async function statementsHandler(request: HttpRequest, context: Invocatio
       };
     }
 
-    // Fetch financial statements
-    const response = await alphaVantageService.getFinancialStatements(ticker, context);
+    // Fetch financial statements with period filter and statement limit
+    const response = await alphaVantageService.getFinancialStatements(
+      ticker,
+      period as 'yearly' | 'quarterly' | undefined,
+      limitStatements,
+      context,
+    );
+
+    // Build response body based on period filter
+    const responseBody: Record<string, unknown> = {
+      symbol: response.symbol,
+    };
+
+    // Only include reports if they exist (non-empty arrays)
+    if (response.annualReports.length > 0) {
+      responseBody.annualReports = response.annualReports;
+    }
+    if (response.quarterlyReports.length > 0) {
+      responseBody.quarterlyReports = response.quarterlyReports;
+    }
 
     // Return successful response with cache status header
     return {
       status: 200,
-      jsonBody: {
-        symbol: response.symbol,
-        annualReports: response.annualReports,
-        quarterlyReports: response.quarterlyReports,
-      },
+      jsonBody: responseBody,
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Content-Type': 'application/json',

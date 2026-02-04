@@ -3,6 +3,8 @@
 #   /api/yahoo-finance?symbols=MSFT&fields=regularMarketPrice
 #   /api/exchange-rate-ecb
 #   /api/statements?ticker=MSFT
+#   /api/statements?ticker=MSFT&period=quarterly
+#   /api/statements?ticker=MSFT&period=yearly
 
 # Build stage
 FROM mcr.microsoft.com/azure-functions/node:4-node24 AS builder
