@@ -45,6 +45,7 @@ export class AlphaVantageService {
     ticker: string,
     period: 'yearly' | 'quarterly' | undefined,
     limitStatements: number | undefined,
+    fields: string[] | undefined,
     context: InvocationContext,
   ): Promise<FinancialStatementsResponse> {
     // Normalize ticker
@@ -56,22 +57,22 @@ export class AlphaVantageService {
       throw new Error(validation.error);
     }
 
-    // Check cache first - include period and limit in cache key
-    const cacheKey = this.buildCacheKey(normalizedTicker, period, limitStatements);
+    // Check cache first - include period, limit, and fields in cache key
+    const cacheKey = this.buildCacheKey(normalizedTicker, period, limitStatements, fields);
     const cachedData = this.cache.get<FinancialStatementsResponse>(cacheKey);
 
     if (cachedData) {
       context.log(
-        `Cache hit for ${normalizedTicker}${period ? ` (${period})` : ''}${limitStatements ? ` (limit:${limitStatements})` : ''}`,
+        `Cache hit for ${normalizedTicker}${period ? ` (${period})` : ''}${limitStatements ? ` (limit:${limitStatements})` : ''}${fields ? ` (fields:${fields.length})` : ''}`,
       );
       return { ...cachedData, cacheStatus: 'HIT' };
     }
 
     context.log(
-      `Cache miss for ${normalizedTicker}${period ? ` (${period})` : ''}${limitStatements ? ` (limit:${limitStatements})` : ''}, fetching from API`,
+      `Cache miss for ${normalizedTicker}${period ? ` (${period})` : ''}${limitStatements ? ` (limit:${limitStatements})` : ''}${fields ? ` (fields:${fields.length})` : ''}, fetching from API`,
     );
 
-    // Fetch from API (without limit - we want full data in cache for flexibility)
+    // Fetch from API (without limit or fields - we want full data in cache for flexibility)
     const data = await this.fetchFromApi(normalizedTicker, context);
 
     // Filter data based on period
@@ -80,20 +81,25 @@ export class AlphaVantageService {
     // Apply statement limit
     const limitedData = this.applyStatementLimit(filteredData, limitStatements);
 
-    // Store in cache
-    this.cache.set(cacheKey, limitedData);
+    // Apply field filtering
+    const fieldFilteredData = this.applyFieldFilter(limitedData, fields);
 
-    return { ...limitedData, cacheStatus: 'MISS' };
+    // Store in cache
+    this.cache.set(cacheKey, fieldFilteredData);
+
+    return { ...fieldFilteredData, cacheStatus: 'MISS' };
   }
 
   private buildCacheKey(
     ticker: string,
     period: 'yearly' | 'quarterly' | undefined,
     limitStatements: number | undefined,
+    fields: string[] | undefined,
   ): string {
     const parts = ['statements', ticker];
     if (period) parts.push(period);
     if (limitStatements) parts.push(`limit${limitStatements}`);
+    if (fields && fields.length > 0) parts.push(`fields:${fields.join(',')}`);
     return parts.join(':');
   }
 
@@ -109,6 +115,53 @@ export class AlphaVantageService {
       symbol: data.symbol,
       annualReports: data.annualReports.slice(0, limitStatements),
       quarterlyReports: data.quarterlyReports.slice(0, limitStatements),
+    };
+  }
+
+  private applyFieldFilter(
+    data: Omit<FinancialStatementsResponse, 'cacheStatus'>,
+    fields: string[] | undefined,
+  ): Omit<FinancialStatementsResponse, 'cacheStatus'> {
+    if (!fields || fields.length === 0) {
+      return data;
+    }
+
+    // Check if a field should be included based on field paths
+    const shouldIncludeField = (statementType: string, fieldName: string): boolean => {
+      // fiscalDateEnding is handled separately
+      if (fieldName === 'fiscalDateEnding') return false;
+      const fullPath = `${statementType}.${fieldName}`;
+      return fields.some((f) => fullPath === f);
+    };
+
+    // Filter a single report based on field paths
+    const filterReport = (report: StatementReport | null, statementType: string): StatementReport | null => {
+      if (!report) return null;
+
+      // Always include fiscalDateEnding in the individual statement
+      const filtered: StatementReport = { fiscalDateEnding: report.fiscalDateEnding };
+      for (const [key, value] of Object.entries(report)) {
+        if (key !== 'fiscalDateEnding' && shouldIncludeField(statementType, key)) {
+          filtered[key] = value;
+        }
+      }
+      return filtered;
+    };
+
+    // Filter merged reports
+    const filterMergedReport = (report: MergedStatementReport): MergedStatementReport => {
+      return {
+        fiscalDateEnding: report.fiscalDateEnding,
+        incomeStatement: report.incomeStatement ? filterReport(report.incomeStatement, 'incomeStatement') : null,
+        balanceSheet: report.balanceSheet ? filterReport(report.balanceSheet, 'balanceSheet') : null,
+        cashFlow: report.cashFlow ? filterReport(report.cashFlow, 'cashFlow') : null,
+      };
+    };
+
+    return {
+      symbol: data.symbol,
+      annualReports: data.annualReports.map(filterMergedReport),
+      quarterlyReports: data.quarterlyReports.map(filterMergedReport),
     };
   }
 

@@ -3,8 +3,9 @@
 #   /api/yahoo-finance?symbols=MSFT&fields=regularMarketPrice
 #   /api/exchange-rate-ecb
 #   /api/statements?ticker=MSFT
-#   /api/statements?ticker=MSFT&period=quarterly
-#   /api/statements?ticker=MSFT&period=yearly
+#   /api/statements?ticker=MSFT&period=quarterly&limitStatements=4
+#   /api/statements?ticker=MSFT&period=yearly&limitStatements=4
+#   /api/statements?ticker=MSFT&period=yearly&limitStatements=4&fields=incomeStatement.grossProfit|balanceSheet.totalAssets
 
 # Build stage
 FROM mcr.microsoft.com/azure-functions/node:4-node24 AS builder

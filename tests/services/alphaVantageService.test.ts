@@ -106,7 +106,7 @@ describe('AlphaVantageService', () => {
       mockedAxios.get.mockResolvedValueOnce({ data: mockBalanceSheet });
       mockedAxios.get.mockResolvedValueOnce({ data: mockCashFlow });
 
-      const result = await service.getFinancialStatements('IBM', undefined, undefined, mockContext);
+      const result = await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
 
       expect(result.symbol).toBe('IBM');
       expect(result.cacheStatus).toBe('MISS');
@@ -128,10 +128,10 @@ describe('AlphaVantageService', () => {
         .mockResolvedValueOnce({ data: mockBalanceSheet })
         .mockResolvedValueOnce({ data: mockCashFlow });
 
-      await service.getFinancialStatements('IBM', undefined, undefined, mockContext);
+      await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
 
       // Second call - should use cache
-      const result = await service.getFinancialStatements('IBM', undefined, undefined, mockContext);
+      const result = await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
 
       // axios should only have been called 3 times total (not 6)
       expect(mockedAxios.get).toHaveBeenCalledTimes(3);
@@ -144,7 +144,7 @@ describe('AlphaVantageService', () => {
         .mockResolvedValueOnce({ data: { ...mockBalanceSheet, symbol: 'ibm' } })
         .mockResolvedValueOnce({ data: { ...mockCashFlow, symbol: 'ibm' } });
 
-      const result = await service.getFinancialStatements('ibm', undefined, undefined, mockContext);
+      const result = await service.getFinancialStatements('ibm', undefined, undefined, undefined, mockContext);
 
       expect(result.symbol).toBe('IBM');
     });
@@ -176,7 +176,7 @@ describe('AlphaVantageService', () => {
         .mockResolvedValueOnce({ data: partialBalance })
         .mockResolvedValueOnce({ data: partialCashFlow });
 
-      const result = await service.getFinancialStatements('IBM', undefined, undefined, mockContext);
+      const result = await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
 
       expect(result.annualReports).toHaveLength(2);
 
@@ -229,7 +229,7 @@ describe('AlphaVantageService', () => {
         .mockResolvedValueOnce({ data: unsortedBalance })
         .mockResolvedValueOnce({ data: unsortedCashFlow });
 
-      const result = await service.getFinancialStatements('IBM', undefined, undefined, mockContext);
+      const result = await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
 
       expect(result.annualReports[0].fiscalDateEnding).toBe('2023-12-31');
       expect(result.annualReports[1].fiscalDateEnding).toBe('2022-12-31');
@@ -240,13 +240,13 @@ describe('AlphaVantageService', () => {
       delete process.env.ALPHAVANTAGE_API_KEY;
       service = new AlphaVantageService(mockCache);
 
-      await expect(service.getFinancialStatements('IBM', undefined, undefined, mockContext)).rejects.toThrow(
+      await expect(service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext)).rejects.toThrow(
         'ALPHAVANTAGE_API_KEY environment variable is not set',
       );
     });
 
     it('should throw error on invalid ticker', async () => {
-      await expect(service.getFinancialStatements('', undefined, undefined, mockContext)).rejects.toThrow(
+      await expect(service.getFinancialStatements('', undefined, undefined, undefined, mockContext)).rejects.toThrow(
         'Ticker symbol is required',
       );
     });
@@ -256,7 +256,7 @@ describe('AlphaVantageService', () => {
         data: { Note: 'API call frequency exceeded' },
       });
 
-      await expect(service.getFinancialStatements('IBM', undefined, undefined, mockContext)).rejects.toThrow(
+      await expect(service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext)).rejects.toThrow(
         'Alpha Vantage API rate limit reached',
       );
     });
@@ -266,7 +266,7 @@ describe('AlphaVantageService', () => {
         data: { Information: 'Invalid API call' },
       });
 
-      await expect(service.getFinancialStatements('IBM', undefined, undefined, mockContext)).rejects.toThrow(
+      await expect(service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext)).rejects.toThrow(
         'Alpha Vantage API error: Invalid API call',
       );
     });
@@ -277,7 +277,7 @@ describe('AlphaVantageService', () => {
       mockedAxios.get.mockRejectedValueOnce(error);
       mockedAxios.isAxiosError.mockReturnValueOnce(true);
 
-      await expect(service.getFinancialStatements('IBM', undefined, undefined, mockContext)).rejects.toThrow(
+      await expect(service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext)).rejects.toThrow(
         'Timeout fetching INCOME_STATEMENT for IBM',
       );
     });
@@ -288,7 +288,7 @@ describe('AlphaVantageService', () => {
       mockedAxios.get.mockRejectedValueOnce(error);
       mockedAxios.isAxiosError.mockReturnValueOnce(true);
 
-      await expect(service.getFinancialStatements('IBM', undefined, undefined, mockContext)).rejects.toThrow(
+      await expect(service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext)).rejects.toThrow(
         'Timeout fetching INCOME_STATEMENT for IBM',
       );
     });
@@ -301,7 +301,7 @@ describe('AlphaVantageService', () => {
 
       mockedAxios.isAxiosError.mockReturnValueOnce(true);
 
-      await expect(service.getFinancialStatements('IBM', undefined, undefined, mockContext)).rejects.toThrow(
+      await expect(service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext)).rejects.toThrow(
         'Alpha Vantage API error for INCOME_STATEMENT: 500 - Internal Server Error',
       );
     });
@@ -367,7 +367,7 @@ describe('AlphaVantageService', () => {
           .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
           .mockResolvedValueOnce({ data: mockCashFlowLimit });
 
-        const result = await service.getFinancialStatements('IBM', undefined, 3, mockContext);
+        const result = await service.getFinancialStatements('IBM', undefined, 3, undefined, mockContext);
 
         expect(result.annualReports).toHaveLength(3);
         expect(result.quarterlyReports).toHaveLength(3);
@@ -386,7 +386,7 @@ describe('AlphaVantageService', () => {
           .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
           .mockResolvedValueOnce({ data: mockCashFlowLimit });
 
-        const result = await service.getFinancialStatements('IBM', 'yearly', 2, mockContext);
+        const result = await service.getFinancialStatements('IBM', 'yearly', 2, undefined, mockContext);
 
         expect(result.annualReports).toHaveLength(2);
         expect(result.quarterlyReports).toHaveLength(0);
@@ -400,7 +400,7 @@ describe('AlphaVantageService', () => {
           .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
           .mockResolvedValueOnce({ data: mockCashFlowLimit });
 
-        const result = await service.getFinancialStatements('IBM', 'quarterly', 4, mockContext);
+        const result = await service.getFinancialStatements('IBM', 'quarterly', 4, undefined, mockContext);
 
         expect(result.annualReports).toHaveLength(0);
         expect(result.quarterlyReports).toHaveLength(4);
@@ -414,7 +414,7 @@ describe('AlphaVantageService', () => {
           .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
           .mockResolvedValueOnce({ data: mockCashFlowLimit });
 
-        const result = await service.getFinancialStatements('IBM', undefined, 100, mockContext);
+        const result = await service.getFinancialStatements('IBM', undefined, 100, undefined, mockContext);
 
         expect(result.annualReports).toHaveLength(5);
         expect(result.quarterlyReports).toHaveLength(5);
@@ -426,7 +426,7 @@ describe('AlphaVantageService', () => {
           .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
           .mockResolvedValueOnce({ data: mockCashFlowLimit });
 
-        const result = await service.getFinancialStatements('IBM', undefined, undefined, mockContext);
+        const result = await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
 
         expect(result.annualReports).toHaveLength(5);
         expect(result.quarterlyReports).toHaveLength(5);
@@ -442,14 +442,170 @@ describe('AlphaVantageService', () => {
           .mockResolvedValueOnce({ data: mockCashFlowLimit });
 
         // First call with limit 2
-        await service.getFinancialStatements('IBM', undefined, 2, mockContext);
+        await service.getFinancialStatements('IBM', undefined, 2, undefined, mockContext);
 
         // Second call with limit 4 - should fetch new data (cache miss)
-        const result = await service.getFinancialStatements('IBM', undefined, 4, mockContext);
+        const result = await service.getFinancialStatements('IBM', undefined, 4, undefined, mockContext);
 
         // axios should have been called 6 times total (not 3)
         expect(mockedAxios.get).toHaveBeenCalledTimes(6);
         expect(result.annualReports).toHaveLength(4);
+      });
+    });
+
+    describe('fields parameter', () => {
+      const mockIncomeStatement = {
+        symbol: 'IBM',
+        annualReports: [
+          {
+            fiscalDateEnding: '2023-12-31',
+            totalRevenue: '1000000',
+            grossProfit: '500000',
+            netIncome: '100000',
+          },
+        ],
+        quarterlyReports: [
+          {
+            fiscalDateEnding: '2024-03-31',
+            totalRevenue: '250000',
+            grossProfit: '125000',
+            netIncome: '25000',
+          },
+        ],
+      };
+
+      const mockBalanceSheet = {
+        symbol: 'IBM',
+        annualReports: [
+          {
+            fiscalDateEnding: '2023-12-31',
+            totalAssets: '5000000',
+            totalLiabilities: '2000000',
+            totalShareholderEquity: '3000000',
+          },
+        ],
+        quarterlyReports: [
+          {
+            fiscalDateEnding: '2024-03-31',
+            totalAssets: '5200000',
+            totalLiabilities: '2100000',
+            totalShareholderEquity: '3100000',
+          },
+        ],
+      };
+
+      const mockCashFlow = {
+        symbol: 'IBM',
+        annualReports: [
+          {
+            fiscalDateEnding: '2023-12-31',
+            operatingCashflow: '150000',
+            capitalExpenditures: '50000',
+          },
+        ],
+        quarterlyReports: [
+          {
+            fiscalDateEnding: '2024-03-31',
+            operatingCashflow: '40000',
+            capitalExpenditures: '12000',
+          },
+        ],
+      };
+
+      beforeEach(() => {
+        mockedAxios.get.mockResolvedValueOnce({ data: mockIncomeStatement });
+        mockedAxios.get.mockResolvedValueOnce({ data: mockBalanceSheet });
+        mockedAxios.get.mockResolvedValueOnce({ data: mockCashFlow });
+      });
+
+      it('should filter fields from all statements', async () => {
+        const result = await service.getFinancialStatements(
+          'IBM',
+          undefined,
+          undefined,
+          ['incomeStatement.grossProfit', 'balanceSheet.totalAssets'],
+          mockContext,
+        );
+
+        expect(result.annualReports).toHaveLength(1);
+        const report = result.annualReports[0];
+
+        // fiscalDateEnding should always be present
+        expect(report.fiscalDateEnding).toBe('2023-12-31');
+
+        // Only grossProfit should be in incomeStatement (plus fiscalDateEnding)
+        expect(report.incomeStatement).toEqual({
+          fiscalDateEnding: '2023-12-31',
+          grossProfit: '500000',
+        });
+
+        // Only totalAssets should be in balanceSheet (plus fiscalDateEnding)
+        expect(report.balanceSheet).toEqual({
+          fiscalDateEnding: '2023-12-31',
+          totalAssets: '5000000',
+        });
+
+        // cashFlow should only have fiscalDateEnding since no fields were requested
+        expect(report.cashFlow).toEqual({
+          fiscalDateEnding: '2023-12-31',
+        });
+      });
+
+      it('should return all fields when fields is undefined', async () => {
+        const result = await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
+
+        const report = result.annualReports[0];
+        expect(report.incomeStatement).toEqual(mockIncomeStatement.annualReports[0]);
+        expect(report.balanceSheet).toEqual(mockBalanceSheet.annualReports[0]);
+        expect(report.cashFlow).toEqual(mockCashFlow.annualReports[0]);
+      });
+
+      it('should return all fields when fields array is empty', async () => {
+        const result = await service.getFinancialStatements('IBM', undefined, undefined, [], mockContext);
+
+        const report = result.annualReports[0];
+        expect(report.incomeStatement).toEqual(mockIncomeStatement.annualReports[0]);
+        expect(report.balanceSheet).toEqual(mockBalanceSheet.annualReports[0]);
+        expect(report.cashFlow).toEqual(mockCashFlow.annualReports[0]);
+      });
+
+      it('should use separate cache for different fields', async () => {
+        // Create a fresh service instance for this test
+        const freshCache = new CacheService();
+        const freshService = new AlphaVantageService(freshCache);
+
+        // Setup mocks for first call
+        mockedAxios.get
+          .mockResolvedValueOnce({ data: mockIncomeStatement })
+          .mockResolvedValueOnce({ data: mockBalanceSheet })
+          .mockResolvedValueOnce({ data: mockCashFlow });
+
+        // First call with fields
+        await freshService.getFinancialStatements(
+          'IBM',
+          undefined,
+          undefined,
+          ['incomeStatement.grossProfit'],
+          mockContext,
+        );
+
+        // Setup mocks for second call
+        mockedAxios.get
+          .mockResolvedValueOnce({ data: mockIncomeStatement })
+          .mockResolvedValueOnce({ data: mockBalanceSheet })
+          .mockResolvedValueOnce({ data: mockCashFlow });
+
+        // Second call with different fields - should be a cache miss
+        const result2 = await freshService.getFinancialStatements(
+          'IBM',
+          undefined,
+          undefined,
+          ['balanceSheet.totalAssets'],
+          mockContext,
+        );
+
+        // Should have fetched from API again (cache miss)
+        expect(result2.cacheStatus).toBe('MISS');
       });
     });
   });

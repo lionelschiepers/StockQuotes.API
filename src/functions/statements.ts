@@ -88,6 +88,17 @@ export async function statementsHandler(request: HttpRequest, context: Invocatio
       }
     }
 
+    // Extract fields parameter for filtering (e.g., "incomeStatement.grossProfit|balanceSheet.totalAssets")
+    const fieldsParam = request.query.get('fields');
+    let fields: string[] | undefined;
+
+    if (fieldsParam) {
+      fields = fieldsParam.split('|').filter((f) => f.trim().length > 0);
+      if (fields.length === 0) {
+        fields = undefined;
+      }
+    }
+
     // Get services from container
     const { alphaVantageService } = getServiceContainer();
 
@@ -108,11 +119,12 @@ export async function statementsHandler(request: HttpRequest, context: Invocatio
       };
     }
 
-    // Fetch financial statements with period filter and statement limit
+    // Fetch financial statements with period filter, statement limit, and field filter
     const response = await alphaVantageService.getFinancialStatements(
       ticker,
       period as 'yearly' | 'quarterly' | undefined,
       limitStatements,
+      fields,
       context,
     );
 

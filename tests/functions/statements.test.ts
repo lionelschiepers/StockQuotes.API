@@ -381,7 +381,13 @@ describe('statementsHandler', () => {
       await statementsHandler(request, mockContext);
 
       // The service should receive the ticker (normalization happens in service)
-      expect(mockAlphaVantageService.getFinancialStatements).toHaveBeenCalledWith('ibm', null, undefined, mockContext);
+      expect(mockAlphaVantageService.getFinancialStatements).toHaveBeenCalledWith(
+        'ibm',
+        null,
+        undefined,
+        undefined,
+        mockContext,
+      );
     });
   });
 
@@ -446,7 +452,13 @@ describe('statementsHandler', () => {
       const request = mockRequest({ ticker: 'IBM', limitStatements: '4' });
       await statementsHandler(request, mockContext);
 
-      expect(mockAlphaVantageService.getFinancialStatements).toHaveBeenCalledWith('IBM', null, 4, mockContext);
+      expect(mockAlphaVantageService.getFinancialStatements).toHaveBeenCalledWith(
+        'IBM',
+        null,
+        4,
+        undefined,
+        mockContext,
+      );
     });
 
     it('should work with both period and limitStatements', async () => {
@@ -461,7 +473,83 @@ describe('statementsHandler', () => {
       const request = mockRequest({ ticker: 'IBM', period: 'yearly', limitStatements: '4' });
       await statementsHandler(request, mockContext);
 
-      expect(mockAlphaVantageService.getFinancialStatements).toHaveBeenCalledWith('IBM', 'yearly', 4, mockContext);
+      expect(mockAlphaVantageService.getFinancialStatements).toHaveBeenCalledWith(
+        'IBM',
+        'yearly',
+        4,
+        undefined,
+        mockContext,
+      );
+    });
+  });
+
+  describe('fields parameter', () => {
+    it('should pass fields to service when provided', async () => {
+      mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
+      mockAlphaVantageService.getFinancialStatements.mockResolvedValue({
+        symbol: 'IBM',
+        annualReports: [],
+        quarterlyReports: [],
+        cacheStatus: 'MISS',
+      });
+
+      const request = mockRequest({ ticker: 'IBM', fields: 'incomeStatement.grossProfit|balanceSheet.totalAssets' });
+      await statementsHandler(request, mockContext);
+
+      expect(mockAlphaVantageService.getFinancialStatements).toHaveBeenCalledWith(
+        'IBM',
+        null,
+        undefined,
+        ['incomeStatement.grossProfit', 'balanceSheet.totalAssets'],
+        mockContext,
+      );
+    });
+
+    it('should pass empty fields array when fields param is empty string', async () => {
+      mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
+      mockAlphaVantageService.getFinancialStatements.mockResolvedValue({
+        symbol: 'IBM',
+        annualReports: [],
+        quarterlyReports: [],
+        cacheStatus: 'MISS',
+      });
+
+      const request = mockRequest({ ticker: 'IBM', fields: '' });
+      await statementsHandler(request, mockContext);
+
+      expect(mockAlphaVantageService.getFinancialStatements).toHaveBeenCalledWith(
+        'IBM',
+        null,
+        undefined,
+        undefined,
+        mockContext,
+      );
+    });
+
+    it('should work with fields and other parameters together', async () => {
+      mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
+      mockAlphaVantageService.getFinancialStatements.mockResolvedValue({
+        symbol: 'IBM',
+        annualReports: [],
+        quarterlyReports: [],
+        cacheStatus: 'MISS',
+      });
+
+      const request = mockRequest({
+        ticker: 'IBM',
+        period: 'yearly',
+        limitStatements: '5',
+        fields: 'incomeStatement.totalRevenue|balanceSheet.totalAssets|cashFlow.operatingCashflow',
+      });
+      await statementsHandler(request, mockContext);
+
+      expect(mockAlphaVantageService.getFinancialStatements).toHaveBeenCalledWith(
+        'IBM',
+        'yearly',
+        5,
+        ['incomeStatement.totalRevenue', 'balanceSheet.totalAssets', 'cashFlow.operatingCashflow'],
+        mockContext,
+      );
     });
   });
 });
