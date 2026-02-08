@@ -1,0 +1,154 @@
+import { yahooFinanceHistoricalHandler } from '../../src/functions/yahoo-finance-historical';
+import { HttpRequest, InvocationContext } from '@azure/functions';
+import { getServiceContainer } from '../../src/di/container';
+import { YahooFinanceService } from '../../src/services/yahooFinanceService';
+import { strictRateLimiter } from '../../src/services/rateLimiter';
+
+// Mock the dependencies
+jest.mock('../../src/di/container');
+jest.mock('../../src/services/rateLimiter');
+
+const mockGetServiceContainer = getServiceContainer as jest.Mock;
+const mockStrictRateLimiter = strictRateLimiter as unknown as { isAllowed: jest.Mock };
+
+describe('yahooFinanceHistoricalHandler', () => {
+  let mockContext: InvocationContext;
+  let mockYahooFinanceService: jest.Mocked<YahooFinanceService>;
+
+  const mockRequest = (query: Record<string, string>, headers: Record<string, string> = {}): HttpRequest => {
+    return {
+      query: {
+        get: (key: string) => query[key] || null,
+      },
+      headers: {
+        get: (key: string) => headers[key] || null,
+      },
+    } as unknown as HttpRequest;
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    mockContext = {
+      log: jest.fn(),
+      error: jest.fn(),
+    } as unknown as InvocationContext;
+
+    mockYahooFinanceService = {
+      getHistoricalData: jest.fn(),
+      validateHistoricalRequest: jest.fn(),
+    } as unknown as jest.Mocked<YahooFinanceService>;
+
+    mockGetServiceContainer.mockReturnValue({
+      yahooFinanceService: mockYahooFinanceService,
+    });
+
+    mockStrictRateLimiter.isAllowed.mockReturnValue({
+      allowed: true,
+      remaining: 19,
+      resetTime: Date.now() + 60000,
+    });
+  });
+
+  it('should return historical data for valid parameters', async () => {
+    const expectedData = { quotes: [{ date: '2024-01-01', close: 100 }] };
+    mockYahooFinanceService.validateHistoricalRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getHistoricalData.mockResolvedValue(expectedData);
+
+    const request = mockRequest({ ticker: 'AAPL', from: '2024-01-01', to: '2024-01-02', interval: '1w' });
+    const response = await yahooFinanceHistoricalHandler(request, mockContext);
+
+    expect(response.status).toBeUndefined(); // defaults to 200
+    expect(response.jsonBody).toEqual(expectedData);
+    expect(mockYahooFinanceService.getHistoricalData).toHaveBeenCalledWith(
+      { ticker: 'AAPL', from: '2024-01-01', to: '2024-01-02', interval: '1w' },
+      mockContext,
+    );
+  });
+
+  it('should pass fields to the service if provided', async () => {
+    mockYahooFinanceService.validateHistoricalRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getHistoricalData.mockResolvedValue({ quotes: [] });
+
+    const request = mockRequest({
+      ticker: 'AAPL',
+      from: '2024-01-01',
+      to: '2024-01-02',
+      fields: 'close,volume',
+    });
+    await yahooFinanceHistoricalHandler(request, mockContext);
+
+    expect(mockYahooFinanceService.getHistoricalData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fields: ['close', 'volume'],
+      }),
+      mockContext,
+    );
+  });
+
+  it('should support pipe delimiter for fields', async () => {
+    mockYahooFinanceService.validateHistoricalRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getHistoricalData.mockResolvedValue({ quotes: [] });
+
+    const request = mockRequest({
+      ticker: 'AAPL',
+      from: '2024-01-01',
+      to: '2024-01-02',
+      fields: 'open|close',
+    });
+    await yahooFinanceHistoricalHandler(request, mockContext);
+
+    expect(mockYahooFinanceService.getHistoricalData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fields: ['open', 'close'],
+      }),
+      mockContext,
+    );
+  });
+
+  it('should return 400 if ticker is missing', async () => {
+    const request = mockRequest({ from: '2024-01-01', to: '2024-01-02' });
+    const response = await yahooFinanceHistoricalHandler(request, mockContext);
+
+    expect(response.status).toBe(400);
+    expect(response.jsonBody).toEqual({ error: 'Missing required parameter: ticker' });
+  });
+
+  it('should return 400 if validation fails', async () => {
+    mockYahooFinanceService.validateHistoricalRequest.mockReturnValue({
+      isValid: false,
+      error: 'Invalid date format',
+    });
+
+    const request = mockRequest({ ticker: 'AAPL', from: 'invalid', to: '2024-01-02' });
+    const response = await yahooFinanceHistoricalHandler(request, mockContext);
+
+    expect(response.status).toBe(400);
+    expect(response.jsonBody).toEqual({ error: 'Invalid date format' });
+  });
+
+  it('should return 429 if rate limit exceeded', async () => {
+    mockStrictRateLimiter.isAllowed.mockReturnValue({
+      allowed: false,
+      remaining: 0,
+      resetTime: Date.now() + 10000,
+    });
+
+    const request = mockRequest({ ticker: 'AAPL', from: '2024-01-01', to: '2024-01-02' });
+    const response = await yahooFinanceHistoricalHandler(request, mockContext);
+
+    expect(response.status).toBe(429);
+    expect(response.jsonBody).toMatchObject({ error: 'Too many requests' });
+  });
+
+  it('should handle service errors', async () => {
+    mockYahooFinanceService.validateHistoricalRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getHistoricalData.mockRejectedValue(new Error('Service failure'));
+
+    const request = mockRequest({ ticker: 'AAPL', from: '2024-01-01', to: '2024-01-02' });
+    const response = await yahooFinanceHistoricalHandler(request, mockContext);
+
+    expect(response.status).toBe(500);
+    expect(response.jsonBody).toMatchObject({ error: 'Internal server error' });
+  });
+});
