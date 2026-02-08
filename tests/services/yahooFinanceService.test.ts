@@ -285,5 +285,36 @@ describe('YahooFinanceService', () => {
       expect(result.isValid).toBe(false);
       expect(result.error).toBe('Invalid from date');
     });
+
+    it('should return isValid: false if daily date range exceeds 5 years', () => {
+      const result = service.validateHistoricalRequest('AAPL', '2019-01-01', '2024-01-02', '1d');
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Date range exceeds maximum of 5 years for daily interval');
+    });
+
+    it('should return isValid: true if daily date range is within 5 years', () => {
+      const result = service.validateHistoricalRequest('AAPL', '2020-01-01', '2024-12-30', '1d');
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should return isValid: false if weekly date range exceeds 20 years', () => {
+      const result = service.validateHistoricalRequest('AAPL', '2004-01-01', '2024-01-02', '1w');
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Date range exceeds maximum of 20 years for weekly interval');
+    });
+
+    it('should return isValid: true if weekly date range is within 20 years', () => {
+      const result = service.validateHistoricalRequest('AAPL', '2005-01-01', '2024-12-01', '1wk');
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should treat 1w and 1wk as weekly interval', () => {
+      const result1w = service.validateHistoricalRequest('AAPL', '2004-01-01', '2024-01-02', '1w');
+      const result1wk = service.validateHistoricalRequest('AAPL', '2004-01-01', '2024-01-02', '1wk');
+      expect(result1w.isValid).toBe(false);
+      expect(result1wk.isValid).toBe(false);
+      expect(result1w.error).toBe('Date range exceeds maximum of 20 years for weekly interval');
+      expect(result1wk.error).toBe('Date range exceeds maximum of 20 years for weekly interval');
+    });
   });
 });

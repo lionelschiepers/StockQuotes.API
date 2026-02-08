@@ -193,6 +193,32 @@ export class YahooFinanceService {
       return { isValid: false, error: 'From date must be before or equal to to date' };
     }
 
+    // Calculate date range limits based on interval
+    const normalizedInterval = interval === '1w' ? '1wk' : (interval ?? '1d');
+    const rangeDays = (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24);
+
+    let maxRangeDays: number;
+    let intervalName: string;
+
+    if (normalizedInterval === '1wk') {
+      maxRangeDays = 365 * 20; // 20 years for weekly
+      intervalName = 'weekly';
+    } else if (normalizedInterval === '1d') {
+      maxRangeDays = 365 * 5; // 5 years for daily
+      intervalName = 'daily';
+    } else {
+      maxRangeDays = 365; // 1 year for other intervals
+      intervalName = 'other';
+    }
+
+    if (rangeDays > maxRangeDays) {
+      const maxYears = maxRangeDays / 365;
+      return {
+        isValid: false,
+        error: `Date range exceeds maximum of ${maxYears} years for ${intervalName} interval`,
+      };
+    }
+
     return { isValid: true };
   }
 }
