@@ -1,6 +1,7 @@
 import axios from 'axios';
-import { InvocationContext } from '@azure/functions';
-import { cacheService, CacheService } from './cacheService';
+import type { InvocationContext } from '@azure/functions';
+import type { CacheService } from './cacheService';
+import { cacheService } from './cacheService';
 
 // Alpha Vantage API response interfaces
 interface AlphaVantageStatementResponse {
@@ -36,7 +37,7 @@ export class AlphaVantageService {
   private readonly timeout: number = 10000; // 10 seconds
 
   constructor(cache: CacheService = cacheService) {
-    this.apiKey = process.env.ALPHAVANTAGE_API_KEY || '';
+    this.apiKey = process.env.ALPHAVANTAGE_API_KEY ?? '';
     this.baseUrl = 'https://www.alphavantage.co/query';
     this.cache = cache;
   }
@@ -232,15 +233,15 @@ export class AlphaVantageService {
 
       // Merge reports
       const annualReports = this.mergeReports(
-        incomeResponse.annualReports || [],
-        balanceResponse.annualReports || [],
-        cashFlowResponse.annualReports || [],
+        incomeResponse.annualReports ?? [],
+        balanceResponse.annualReports ?? [],
+        cashFlowResponse.annualReports ?? [],
       );
 
       const quarterlyReports = this.mergeReports(
-        incomeResponse.quarterlyReports || [],
-        balanceResponse.quarterlyReports || [],
-        cashFlowResponse.quarterlyReports || [],
+        incomeResponse.quarterlyReports ?? [],
+        balanceResponse.quarterlyReports ?? [],
+        cashFlowResponse.quarterlyReports ?? [],
       );
 
       context.log(`Successfully fetched and merged financial statements for ${ticker}`);
@@ -339,9 +340,9 @@ export class AlphaVantageService {
     for (const fiscalDateEnding of allDates) {
       mergedReports.push({
         fiscalDateEnding,
-        incomeStatement: incomeMap.get(fiscalDateEnding) || null,
-        balanceSheet: balanceMap.get(fiscalDateEnding) || null,
-        cashFlow: cashFlowMap.get(fiscalDateEnding) || null,
+        incomeStatement: incomeMap.get(fiscalDateEnding) ?? null,
+        balanceSheet: balanceMap.get(fiscalDateEnding) ?? null,
+        cashFlow: cashFlowMap.get(fiscalDateEnding) ?? null,
       });
     }
 

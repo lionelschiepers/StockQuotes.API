@@ -1,6 +1,6 @@
 import { AlphaVantageService } from '../../src/services/alphaVantageService';
 import { CacheService } from '../../src/services/cacheService';
-import { InvocationContext } from '@azure/functions';
+import type { InvocationContext } from '@azure/functions';
 import axios from 'axios';
 
 jest.mock('axios');

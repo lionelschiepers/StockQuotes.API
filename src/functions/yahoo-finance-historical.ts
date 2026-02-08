@@ -1,4 +1,5 @@
-import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
+import type { HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
+import { app } from '@azure/functions';
 import { getServiceContainer } from '../di/container';
 import { strictRateLimiter } from '../services/rateLimiter';
 import { cacheService } from '../services/cacheService';
@@ -14,7 +15,7 @@ export async function yahooFinanceHistoricalHandler(
 
   try {
     // Extract client IP for rate limiting
-    const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const clientIp = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown';
 
     // Apply rate limiting
     const rateLimitResult = strictRateLimiter.isAllowed(clientIp);
@@ -40,7 +41,7 @@ export async function yahooFinanceHistoricalHandler(
     const ticker = request.query.get('ticker');
     const from = request.query.get('from');
     const to = request.query.get('to');
-    const interval = request.query.get('interval') || undefined;
+    const interval = request.query.get('interval') ?? undefined;
     const fieldsParam = request.query.get('fields');
     const fields = fieldsParam ? fieldsParam.split(/[|,]/).filter((f) => f.length > 0) : undefined;
 
@@ -52,7 +53,7 @@ export async function yahooFinanceHistoricalHandler(
     }
 
     // Validate request using service
-    const validation = yahooFinanceService.validateHistoricalRequest(ticker, from || '', to || '', interval, fields);
+    const validation = yahooFinanceService.validateHistoricalRequest(ticker, from ?? '', to ?? '', interval, fields);
     if (!validation.isValid) {
       return {
         status: 400,
@@ -61,7 +62,7 @@ export async function yahooFinanceHistoricalHandler(
     }
 
     // Check cache first
-    const cacheKey = `hist:${ticker}:${from}:${to}:${interval || '1d'}:${fields ? [...fields].sort().join(',') : 'all'}`;
+    const cacheKey = `hist:${ticker}:${from}:${to}:${interval ?? '1d'}:${fields ? [...fields].sort().join(',') : 'all'}`;
     const cached = cacheService.get<unknown>(cacheKey);
     if (cached) {
       context.log(`Cache hit for ${cacheKey}`);
@@ -108,10 +109,10 @@ export async function yahooFinanceHistoricalHandler(
       const axiosError = error as { response?: { status?: number; statusText?: string } };
       // External API error
       return {
-        status: axiosError.response?.status || 502,
+        status: axiosError.response?.status ?? 502,
         jsonBody: {
           error: 'External API error',
-          message: axiosError.response?.statusText || 'Unknown error',
+          message: axiosError.response?.statusText ?? 'Unknown error',
           status: axiosError.response?.status,
         },
       };

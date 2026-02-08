@@ -1,7 +1,7 @@
 import { yahooFinanceHistoricalHandler } from '../../src/functions/yahoo-finance-historical';
-import { HttpRequest, InvocationContext } from '@azure/functions';
+import type { HttpRequest, InvocationContext } from '@azure/functions';
 import { getServiceContainer } from '../../src/di/container';
-import { YahooFinanceService } from '../../src/services/yahooFinanceService';
+import type { YahooFinanceService } from '../../src/services/yahooFinanceService';
 import { strictRateLimiter } from '../../src/services/rateLimiter';
 import { cacheService } from '../../src/services/cacheService';
 

@@ -1,5 +1,5 @@
 import { YahooFinanceService } from '../../src/services/yahooFinanceService';
-import { InvocationContext } from '@azure/functions';
+import type { InvocationContext } from '@azure/functions';
 
 const mockContext = {
   log: jest.fn(),

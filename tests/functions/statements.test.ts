@@ -1,8 +1,8 @@
 import { statementsHandler } from '../../src/functions/statements';
-import { HttpRequest, InvocationContext } from '@azure/functions';
+import type { HttpRequest, InvocationContext } from '@azure/functions';
 import { getServiceContainer } from '../../src/di/container';
-import { AlphaVantageService } from '../../src/services/alphaVantageService';
-import { CacheService } from '../../src/services/cacheService';
+import type { AlphaVantageService } from '../../src/services/alphaVantageService';
+import type { CacheService } from '../../src/services/cacheService';
 import { apiRateLimiter } from '../../src/services/rateLimiter';
 
 // Mock the dependencies

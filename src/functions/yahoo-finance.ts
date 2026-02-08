@@ -1,4 +1,5 @@
-import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
+import type { HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
+import { app } from '@azure/functions';
 import { getServiceContainer } from '../di/container';
 import { strictRateLimiter } from '../services/rateLimiter';
 
@@ -10,7 +11,7 @@ export async function yahooFinanceHandler(request: HttpRequest, context: Invocat
 
   try {
     // Extract client IP for rate limiting
-    const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const clientIp = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown';
 
     // Apply rate limiting
     const rateLimitResult = strictRateLimiter.isAllowed(clientIp);
@@ -92,10 +93,10 @@ export async function yahooFinanceHandler(request: HttpRequest, context: Invocat
       const axiosError = error as { response?: { status?: number; statusText?: string } };
       // External API error
       return {
-        status: axiosError.response?.status || 502,
+        status: axiosError.response?.status ?? 502,
         jsonBody: {
           error: 'External API error',
-          message: axiosError.response?.statusText || 'Unknown error',
+          message: axiosError.response?.statusText ?? 'Unknown error',
           status: axiosError.response?.status,
         },
       };

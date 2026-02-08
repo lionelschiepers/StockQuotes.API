@@ -1,4 +1,4 @@
-import { InvocationContext } from '@azure/functions';
+import type { InvocationContext } from '@azure/functions';
 import YahooFinance from 'yahoo-finance2';
 
 export interface YahooFinanceQuoteRequest {
@@ -25,7 +25,7 @@ export class YahooFinanceService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(yahooFinance?: any) {
     this.yahooFinance =
-      yahooFinance ||
+      yahooFinance ??
       new YahooFinance({
         suppressNotices: ['yahooSurvey'],
         fetchOptions: {
@@ -55,7 +55,7 @@ export class YahooFinanceService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getHistoricalData(request: YahooFinanceHistoricalRequest, context: InvocationContext): Promise<any> {
     try {
-      const interval = request.interval === '1w' ? '1wk' : request.interval || '1d';
+      const interval = request.interval === '1w' ? '1wk' : (request.interval ?? '1d');
       context.log(
         `Fetching historical data for ticker: ${request.ticker} from ${request.from} to ${request.to} with interval: ${interval}`,
       );
@@ -66,7 +66,7 @@ export class YahooFinanceService {
         interval,
       });
 
-      if (response && response.quotes && Array.isArray(response.quotes)) {
+      if (response?.quotes && Array.isArray(response.quotes)) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         response.quotes = response.quotes.map((quote: any) => {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars

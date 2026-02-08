@@ -202,7 +202,7 @@ describe('CacheService', () => {
 
   describe('concurrent access', () => {
     it('should handle concurrent reads and writes', async () => {
-      const operations: Promise<void>[] = [];
+      const operations: Array<Promise<void>> = [];
 
       // Concurrent writes
       for (let i = 0; i < 100; i++) {

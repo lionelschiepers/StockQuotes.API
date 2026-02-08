@@ -1,4 +1,5 @@
-import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
+import type { HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
+import { app } from '@azure/functions';
 import { exchangeRateService } from '../services/exchangeRateService';
 import { apiRateLimiter } from '../services/rateLimiter';
 
@@ -10,7 +11,7 @@ export async function exchangeRateEcbHandler(
 
   try {
     // Extract client IP for rate limiting
-    const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const clientIp = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown';
 
     // Apply rate limiting
     const rateLimitResult = apiRateLimiter.isAllowed(clientIp);
@@ -63,10 +64,10 @@ export async function exchangeRateEcbHandler(
       const axiosError = error as { response?: { status?: number; statusText?: string } };
       // External API error
       return {
-        status: axiosError.response?.status || 502,
+        status: axiosError.response?.status ?? 502,
         jsonBody: {
           error: 'External API error',
-          message: axiosError.response?.statusText || 'Failed to fetch exchange rates',
+          message: axiosError.response?.statusText ?? 'Failed to fetch exchange rates',
           status: axiosError.response?.status,
         },
       };

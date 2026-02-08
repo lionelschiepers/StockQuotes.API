@@ -1,7 +1,8 @@
 import { YahooFinanceService } from '../services/yahooFinanceService';
 import { ExchangeRateService } from '../services/exchangeRateService';
 import { AlphaVantageService } from '../services/alphaVantageService';
-import { cacheService, CacheService } from '../services/cacheService';
+import type { CacheService } from '../services/cacheService';
+import { cacheService } from '../services/cacheService';
 
 export interface ServiceContainer {
   yahooFinanceService: YahooFinanceService;

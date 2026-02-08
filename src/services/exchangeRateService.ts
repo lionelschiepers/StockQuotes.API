@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { InvocationContext } from '@azure/functions';
+import type { InvocationContext } from '@azure/functions';
 
 export interface ExchangeRateResponse {
   data: string;
@@ -25,7 +25,7 @@ export class ExchangeRateService {
 
       return {
         data: response.data,
-        contentType: response.headers['content-type'] || 'application/xml',
+        contentType: response.headers['content-type'] ?? 'application/xml',
       };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

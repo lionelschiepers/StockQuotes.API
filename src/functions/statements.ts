@@ -1,4 +1,5 @@
-import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
+import type { HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
+import { app } from '@azure/functions';
 import { getServiceContainer } from '../di/container';
 import { apiRateLimiter } from '../services/rateLimiter';
 
@@ -7,7 +8,7 @@ export async function statementsHandler(request: HttpRequest, context: Invocatio
 
   try {
     // Extract client IP for rate limiting
-    const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const clientIp = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown';
 
     // Apply rate limiting (100 requests per minute like exchange-rate-ecb)
     const rateLimitResult = apiRateLimiter.isAllowed(clientIp);
@@ -163,10 +164,10 @@ export async function statementsHandler(request: HttpRequest, context: Invocatio
       const axiosError = error as { response?: { status?: number; statusText?: string } };
       // External API error
       return {
-        status: axiosError.response?.status || 502,
+        status: axiosError.response?.status ?? 502,
         jsonBody: {
           error: 'External API error',
-          message: axiosError.response?.statusText || 'Failed to fetch financial statements from Alpha Vantage',
+          message: axiosError.response?.statusText ?? 'Failed to fetch financial statements from Alpha Vantage',
           status: axiosError.response?.status,
         },
       };

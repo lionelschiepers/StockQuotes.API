@@ -12,7 +12,7 @@ export class CacheService {
 
   constructor() {
     this.cache = new Map();
-    const ttlSeconds = parseInt(process.env.CACHE_TTL_SECONDS || '86400', 10);
+    const ttlSeconds = parseInt(process.env.CACHE_TTL_SECONDS ?? '86400', 10);
     this.ttlMs = ttlSeconds * 1000;
     this.enabled = process.env.CACHE_ENABLED !== 'false';
 

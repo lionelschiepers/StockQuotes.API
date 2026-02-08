@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { InvocationContext } from '@azure/functions';
+import type { InvocationContext } from '@azure/functions';
 import { ExchangeRateService } from '../../src/services/exchangeRateService';
 
 jest.mock('axios');
