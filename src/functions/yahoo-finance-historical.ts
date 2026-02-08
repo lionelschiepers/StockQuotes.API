@@ -1,6 +1,7 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import { getServiceContainer } from '../di/container';
 import { strictRateLimiter } from '../services/rateLimiter';
+import { cacheService } from '../services/cacheService';
 
 // sample call: http://localhost:7071/api/yahoo-finance-historical?ticker=MSFT&from=2024-01-01&to=2024-12-31
 export async function yahooFinanceHistoricalHandler(
@@ -59,17 +60,41 @@ export async function yahooFinanceHistoricalHandler(
       };
     }
 
+    // Check cache first
+    const cacheKey = `hist:${ticker}:${from}:${to}:${interval || '1d'}:${fields ? [...fields].sort().join(',') : 'all'}`;
+    const cached = cacheService.get<unknown>(cacheKey);
+    if (cached) {
+      context.log(`Cache hit for ${cacheKey}`);
+      return {
+        jsonBody: cached,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'max-age=3600',
+          'Content-Type': 'application/json',
+          'X-Cache': 'HIT',
+          'X-RateLimit-Limit': '20',
+          'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
+          'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
+        },
+      };
+    }
+
     const responseMessage = await yahooFinanceService.getHistoricalData(
       { ticker, from: from!, to: to!, interval, fields },
       context,
     );
 
+    // Store in cache
+    cacheService.set(cacheKey, responseMessage);
+    context.log(`Cache stored for ${cacheKey}`);
+
     return {
       jsonBody: responseMessage,
       headers: {
         'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'max-age=3600', // Historical data can be cached longer
+        'Cache-Control': 'max-age=3600',
         'Content-Type': 'application/json',
+        'X-Cache': 'MISS',
         'X-RateLimit-Limit': '20',
         'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
         'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),

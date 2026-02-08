@@ -3,13 +3,16 @@ import { HttpRequest, InvocationContext } from '@azure/functions';
 import { getServiceContainer } from '../../src/di/container';
 import { YahooFinanceService } from '../../src/services/yahooFinanceService';
 import { strictRateLimiter } from '../../src/services/rateLimiter';
+import { cacheService } from '../../src/services/cacheService';
 
 // Mock the dependencies
 jest.mock('../../src/di/container');
 jest.mock('../../src/services/rateLimiter');
+jest.mock('../../src/services/cacheService');
 
 const mockGetServiceContainer = getServiceContainer as jest.Mock;
 const mockStrictRateLimiter = strictRateLimiter as unknown as { isAllowed: jest.Mock };
+const mockCacheService = cacheService as unknown as { get: jest.Mock; set: jest.Mock };
 
 describe('yahooFinanceHistoricalHandler', () => {
   let mockContext: InvocationContext;
@@ -48,6 +51,9 @@ describe('yahooFinanceHistoricalHandler', () => {
       remaining: 19,
       resetTime: Date.now() + 60000,
     });
+
+    mockCacheService.get.mockReturnValue(null);
+    mockCacheService.set.mockImplementation(() => {});
   });
 
   it('should return historical data for valid parameters', async () => {
@@ -64,6 +70,22 @@ describe('yahooFinanceHistoricalHandler', () => {
       { ticker: 'AAPL', from: '2024-01-01', to: '2024-01-02', interval: '1w' },
       mockContext,
     );
+    expect(mockCacheService.set).toHaveBeenCalled();
+    expect(response.headers).toMatchObject({ 'X-Cache': 'MISS' });
+  });
+
+  it('should return cached data when available', async () => {
+    const cachedData = { quotes: [{ date: '2024-01-01', close: 100 }] };
+    mockYahooFinanceService.validateHistoricalRequest.mockReturnValue({ isValid: true });
+    mockCacheService.get.mockReturnValue(cachedData);
+
+    const request = mockRequest({ ticker: 'AAPL', from: '2024-01-01', to: '2024-01-02' });
+    const response = await yahooFinanceHistoricalHandler(request, mockContext);
+
+    expect(response.status).toBeUndefined();
+    expect(response.jsonBody).toEqual(cachedData);
+    expect(mockYahooFinanceService.getHistoricalData).not.toHaveBeenCalled();
+    expect(response.headers).toMatchObject({ 'X-Cache': 'HIT' });
   });
 
   it('should pass fields to the service if provided', async () => {
