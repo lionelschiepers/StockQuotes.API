@@ -164,8 +164,9 @@ export class YahooFinanceService {
       return { isValid: false, error: 'To date must be in yyyy-MM-dd format' };
     }
 
-    if (interval && !['1d', '1w', '1wk'].includes(interval)) {
-      return { isValid: false, error: 'Interval must be "1d", "1w" or "1wk"' };
+    const validIntervals = ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '1w', '1wk', '1mo', '3mo'];
+    if (interval && !validIntervals.includes(interval)) {
+      return { isValid: false, error: 'Interval must be one of: ' + validIntervals.join(', ') };
     }
 
     if (fields && fields.length > 0) {
@@ -197,22 +198,38 @@ export class YahooFinanceService {
     const normalizedInterval = interval === '1w' ? '1wk' : (interval ?? '1d');
     const rangeDays = (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24);
 
+    // Intraday intervals (less than 1 day) are limited to 1 week
+    const intradayIntervals = ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h'];
+    const isIntraday = intradayIntervals.includes(normalizedInterval);
+
     let maxRangeDays: number;
     let intervalName: string;
 
-    if (normalizedInterval === '1wk') {
+    if (isIntraday) {
+      maxRangeDays = 7; // 1 week for intraday intervals
+      intervalName = 'intraday';
+    } else if (normalizedInterval === '1wk') {
       maxRangeDays = 365 * 20; // 20 years for weekly
       intervalName = 'weekly';
     } else if (normalizedInterval === '1d') {
       maxRangeDays = 365 * 5; // 5 years for daily
       intervalName = 'daily';
+    } else if (normalizedInterval === '1mo' || normalizedInterval === '3mo') {
+      maxRangeDays = 365 * 50; // 50 years for monthly intervals
+      intervalName = 'monthly';
     } else {
       maxRangeDays = 365; // 1 year for other intervals
       intervalName = 'other';
     }
 
     if (rangeDays > maxRangeDays) {
-      const maxYears = maxRangeDays / 365;
+      if (isIntraday) {
+        return {
+          isValid: false,
+          error: `Date range exceeds maximum of 7 days for intraday interval "${normalizedInterval}"`,
+        };
+      }
+      const maxYears = Math.round(maxRangeDays / 365);
       return {
         isValid: false,
         error: `Date range exceeds maximum of ${maxYears} years for ${intervalName} interval`,

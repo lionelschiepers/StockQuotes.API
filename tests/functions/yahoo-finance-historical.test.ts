@@ -173,4 +173,66 @@ describe('yahooFinanceHistoricalHandler', () => {
     expect(response.status).toBe(500);
     expect(response.jsonBody).toMatchObject({ error: 'Internal server error' });
   });
+
+  it('should return ETag header in response', async () => {
+    const expectedData = { quotes: [{ date: '2024-01-01', close: 100 }] };
+    mockYahooFinanceService.validateHistoricalRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getHistoricalData.mockResolvedValue(expectedData);
+
+    const request = mockRequest({ ticker: 'AAPL', from: '2024-01-01', to: '2024-01-02' });
+    const response = await yahooFinanceHistoricalHandler(request, mockContext);
+
+    expect(response.headers).toHaveProperty('ETag');
+    expect((response.headers as Record<string, string>)['ETag']).toMatch(/^"[A-Za-z0-9+/]+="$/);
+  });
+
+  it('should return 304 Not Modified when If-None-Match matches ETag', async () => {
+    mockYahooFinanceService.validateHistoricalRequest.mockReturnValue({ isValid: true });
+
+    // Calculate expected ETag
+    const cacheKey = 'hist:AAPL:2024-01-01:2024-01-02:1d:all';
+    const expectedETag = `"${Buffer.from(cacheKey).toString('base64')}"`;
+
+    const request = mockRequest(
+      { ticker: 'AAPL', from: '2024-01-01', to: '2024-01-02' },
+      { 'If-None-Match': expectedETag },
+    );
+    const response = await yahooFinanceHistoricalHandler(request, mockContext);
+
+    expect(response.status).toBe(304);
+    expect(response.jsonBody).toBeUndefined();
+    expect(response.headers).toHaveProperty('ETag', expectedETag);
+    expect(mockYahooFinanceService.getHistoricalData).not.toHaveBeenCalled();
+    expect(mockCacheService.get).not.toHaveBeenCalled();
+  });
+
+  it('should return fresh data when If-None-Match does not match ETag', async () => {
+    const expectedData = { quotes: [{ date: '2024-01-01', close: 100 }] };
+    mockYahooFinanceService.validateHistoricalRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getHistoricalData.mockResolvedValue(expectedData);
+
+    const request = mockRequest(
+      { ticker: 'AAPL', from: '2024-01-01', to: '2024-01-02' },
+      { 'If-None-Match': '"different-etag"' },
+    );
+    const response = await yahooFinanceHistoricalHandler(request, mockContext);
+
+    expect(response.status).toBeUndefined();
+    expect(response.jsonBody).toEqual(expectedData);
+    expect(mockYahooFinanceService.getHistoricalData).toHaveBeenCalled();
+  });
+
+  it('should return cached data with ETag when cache hit occurs', async () => {
+    const cachedData = { quotes: [{ date: '2024-01-01', close: 100 }] };
+    mockYahooFinanceService.validateHistoricalRequest.mockReturnValue({ isValid: true });
+    mockCacheService.get.mockReturnValue(cachedData);
+
+    const request = mockRequest({ ticker: 'AAPL', from: '2024-01-01', to: '2024-01-02' });
+    const response = await yahooFinanceHistoricalHandler(request, mockContext);
+
+    expect(response.status).toBeUndefined();
+    expect(response.jsonBody).toEqual(cachedData);
+    expect(response.headers).toHaveProperty('ETag');
+    expect((response.headers as Record<string, string>)['ETag']).toMatch(/^"[A-Za-z0-9+/]+="$/);
+  });
 });

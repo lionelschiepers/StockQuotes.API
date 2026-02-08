@@ -63,6 +63,25 @@ export async function yahooFinanceHistoricalHandler(
 
     // Check cache first
     const cacheKey = `hist:${ticker}:${from}:${to}:${interval ?? '1d'}:${fields ? [...fields].sort().join(',') : 'all'}`;
+    const etag = `"${Buffer.from(cacheKey).toString('base64')}"`;
+
+    // Check for conditional request (ETag match)
+    const ifNoneMatch = request.headers.get('If-None-Match');
+    if (ifNoneMatch === etag) {
+      context.log(`ETag match for ${cacheKey}, returning 304`);
+      return {
+        status: 304,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'max-age=3600',
+          ETag: etag,
+          'X-RateLimit-Limit': '20',
+          'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
+          'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
+        },
+      };
+    }
+
     const cached = cacheService.get<unknown>(cacheKey);
     if (cached) {
       context.log(`Cache hit for ${cacheKey}`);
@@ -72,6 +91,7 @@ export async function yahooFinanceHistoricalHandler(
           'Access-Control-Allow-Origin': '*',
           'Cache-Control': 'max-age=3600',
           'Content-Type': 'application/json',
+          ETag: etag,
           'X-Cache': 'HIT',
           'X-RateLimit-Limit': '20',
           'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
@@ -95,6 +115,7 @@ export async function yahooFinanceHistoricalHandler(
         'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'max-age=3600',
         'Content-Type': 'application/json',
+        ETag: etag,
         'X-Cache': 'MISS',
         'X-RateLimit-Limit': '20',
         'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),

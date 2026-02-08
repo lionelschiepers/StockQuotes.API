@@ -238,9 +238,9 @@ describe('YahooFinanceService', () => {
     });
 
     it('should return isValid: false for invalid interval', () => {
-      const result = service.validateHistoricalRequest('AAPL', '2024-01-01', '2024-01-10', '1mo');
+      const result = service.validateHistoricalRequest('AAPL', '2024-01-01', '2024-01-10', 'invalid');
       expect(result.isValid).toBe(false);
-      expect(result.error).toBe('Interval must be "1d", "1w" or "1wk"');
+      expect(result.error).toBe('Interval must be one of: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 1w, 1wk, 1mo, 3mo');
     });
 
     it('should return isValid: false for invalid fields', () => {
@@ -315,6 +315,34 @@ describe('YahooFinanceService', () => {
       expect(result1wk.isValid).toBe(false);
       expect(result1w.error).toBe('Date range exceeds maximum of 20 years for weekly interval');
       expect(result1wk.error).toBe('Date range exceeds maximum of 20 years for weekly interval');
+    });
+
+    it('should return isValid: true for intraday intervals like 1m, 5m, 1h', () => {
+      const result1m = service.validateHistoricalRequest('AAPL', '2024-01-01', '2024-01-07', '1m');
+      const result5m = service.validateHistoricalRequest('AAPL', '2024-01-01', '2024-01-07', '5m');
+      const result1h = service.validateHistoricalRequest('AAPL', '2024-01-01', '2024-01-07', '1h');
+      expect(result1m.isValid).toBe(true);
+      expect(result5m.isValid).toBe(true);
+      expect(result1h.isValid).toBe(true);
+    });
+
+    it('should return isValid: false if intraday interval exceeds 7 days', () => {
+      const result = service.validateHistoricalRequest('AAPL', '2024-01-01', '2024-01-09', '1m');
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Date range exceeds maximum of 7 days for intraday interval "1m"');
+    });
+
+    it('should return isValid: true for monthly intervals 1mo and 3mo', () => {
+      const result1mo = service.validateHistoricalRequest('AAPL', '2000-01-01', '2024-01-01', '1mo');
+      const result3mo = service.validateHistoricalRequest('AAPL', '2000-01-01', '2024-01-01', '3mo');
+      expect(result1mo.isValid).toBe(true);
+      expect(result3mo.isValid).toBe(true);
+    });
+
+    it('should return isValid: false if monthly interval exceeds 50 years', () => {
+      const result = service.validateHistoricalRequest('AAPL', '1970-01-01', '2024-01-01', '1mo');
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Date range exceeds maximum of 50 years for monthly interval');
     });
   });
 });
