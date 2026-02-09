@@ -8,6 +8,8 @@
 #   /api/statements?ticker=MSFT&period=yearly&limitStatements=4&fields=incomeStatement.grossProfit|balanceSheet.totalAssets
 #   /api/yahoo-finance-historical?ticker=MSFT&from=2020-01-01&to=2026-02-01&interval=1wk&fields=open,close,low
 
+ARG ALPHAVANTAGE_API_KEY=demo
+
 # Build stage
 FROM mcr.microsoft.com/azure-functions/node:4-node24 AS builder
 
@@ -27,6 +29,9 @@ FROM mcr.microsoft.com/azure-functions/node:4-node24
 
 ENV AzureWebJobsScriptRoot=/home/site/wwwroot
 ENV AzureFunctionsJobHost__Logging__Console__IsEnabled=true
+
+ARG ALPHAVANTAGE_API_KEY
+ENV ALPHAVANTAGE_API_KEY=${ALPHAVANTAGE_API_KEY}
 
 # Security hardening - update packages and install only necessary tools
  RUN apt-get update && \
