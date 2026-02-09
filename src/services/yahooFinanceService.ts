@@ -209,7 +209,7 @@ export class YahooFinanceService {
       maxRangeDays = 7; // 1 week for intraday intervals
       intervalName = 'intraday';
     } else if (normalizedInterval === '1wk') {
-      maxRangeDays = 365 * 20; // 20 years for weekly
+      maxRangeDays = 365 * 50; // 50 years for weekly
       intervalName = 'weekly';
     } else if (normalizedInterval === '1d') {
       maxRangeDays = 365 * 5; // 5 years for daily
