@@ -70,6 +70,7 @@ describe('statementsHandler', () => {
           incomeStatement: { fiscalDateEnding: '2023-12-31', totalRevenue: '1000000' },
           balanceSheet: { fiscalDateEnding: '2023-12-31', totalAssets: '5000000' },
           cashFlow: { fiscalDateEnding: '2023-12-31', operatingCashflow: '150000' },
+          ratio: { fiscalDateEnding: '2023-12-31', reportedEPS: '9.61' },
         },
       ],
       quarterlyReports: [
@@ -78,6 +79,7 @@ describe('statementsHandler', () => {
           incomeStatement: { fiscalDateEnding: '2024-03-31', totalRevenue: '250000' },
           balanceSheet: { fiscalDateEnding: '2024-03-31', totalAssets: '5200000' },
           cashFlow: { fiscalDateEnding: '2024-03-31', operatingCashflow: '40000' },
+          ratio: { fiscalDateEnding: '2024-03-31', reportedEPS: '1.68' },
         },
       ],
       cacheStatus: 'MISS' as const,

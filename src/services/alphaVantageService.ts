@@ -15,12 +15,31 @@ interface StatementReport {
   [key: string]: string | number | undefined;
 }
 
+// Earnings API response interfaces
+interface AlphaVantageEarningsResponse {
+  symbol: string;
+  annualEarnings?: EarningsReport[];
+  quarterlyEarnings?: EarningsReport[];
+}
+
+interface EarningsReport {
+  fiscalDateEnding: string;
+  reportedEPS?: string;
+  [key: string]: string | number | undefined;
+}
+
 // Merged response interfaces
+export interface RatioReport {
+  fiscalDateEnding: string;
+  reportedEPS: string | null;
+}
+
 export interface MergedStatementReport {
   fiscalDateEnding: string;
   incomeStatement: StatementReport | null;
   balanceSheet: StatementReport | null;
   cashFlow: StatementReport | null;
+  ratio: RatioReport | null;
 }
 
 export interface FinancialStatementsResponse {
@@ -149,6 +168,16 @@ export class AlphaVantageService {
       return filtered;
     };
 
+    // Filter ratio report
+    const filterRatioReport = (report: RatioReport | null): RatioReport | null => {
+      if (!report) return null;
+      const filtered: RatioReport = { fiscalDateEnding: report.fiscalDateEnding, reportedEPS: report.reportedEPS };
+      if (shouldIncludeField('ratio', 'reportedEPS')) {
+        filtered.reportedEPS = report.reportedEPS;
+      }
+      return filtered;
+    };
+
     // Filter merged reports
     const filterMergedReport = (report: MergedStatementReport): MergedStatementReport => {
       return {
@@ -156,6 +185,7 @@ export class AlphaVantageService {
         incomeStatement: report.incomeStatement ? filterReport(report.incomeStatement, 'incomeStatement') : null,
         balanceSheet: report.balanceSheet ? filterReport(report.balanceSheet, 'balanceSheet') : null,
         cashFlow: report.cashFlow ? filterReport(report.cashFlow, 'cashFlow') : null,
+        ratio: report.ratio ? filterRatioReport(report.ratio) : null,
       };
     };
 
@@ -220,6 +250,10 @@ export class AlphaVantageService {
       await this.delay(600);
       const cashFlowResponse = await this.fetchStatement(ticker, 'CASH_FLOW', context);
 
+      // Wait 600ms before next request
+      await this.delay(600);
+      const earningsResponse = await this.fetchEarnings(ticker, context);
+
       // Validate responses
       if (!this.isValidResponse(incomeResponse)) {
         throw new Error('Invalid income statement response from Alpha Vantage');
@@ -236,12 +270,14 @@ export class AlphaVantageService {
         incomeResponse.annualReports ?? [],
         balanceResponse.annualReports ?? [],
         cashFlowResponse.annualReports ?? [],
+        earningsResponse.annualEarnings ?? [],
       );
 
       const quarterlyReports = this.mergeReports(
         incomeResponse.quarterlyReports ?? [],
         balanceResponse.quarterlyReports ?? [],
         cashFlowResponse.quarterlyReports ?? [],
+        earningsResponse.quarterlyEarnings ?? [],
       );
 
       context.log(`Successfully fetched and merged financial statements for ${ticker}`);
@@ -303,15 +339,59 @@ export class AlphaVantageService {
     return response && typeof response === 'object' && 'symbol' in response;
   }
 
+  private isValidEarningsResponse(response: AlphaVantageEarningsResponse): boolean {
+    return response && typeof response === 'object' && 'symbol' in response;
+  }
+
+  private async fetchEarnings(ticker: string, context: InvocationContext): Promise<AlphaVantageEarningsResponse> {
+    const url = `${this.baseUrl}?function=EARNINGS&symbol=${ticker}&apikey=${this.apiKey}`;
+
+    context.log(`Fetching EARNINGS for ${ticker}`);
+
+    try {
+      const response = await axios.get<AlphaVantageEarningsResponse>(url, {
+        timeout: this.timeout,
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+
+      // Check for API limit reached or other errors
+      if (response.data && 'Note' in response.data) {
+        throw new Error('Alpha Vantage API rate limit reached');
+      }
+
+      if (response.data && 'Information' in response.data) {
+        throw new Error(`Alpha Vantage API error: ${(response.data as Record<string, string>).Information}`);
+      }
+
+      return response.data;
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+          throw new Error(`Timeout fetching EARNINGS for ${ticker}`);
+        }
+        if (error.response) {
+          throw new Error(
+            `Alpha Vantage API error for EARNINGS: ${error.response.status} - ${error.response.statusText}`,
+          );
+        }
+      }
+      throw error;
+    }
+  }
+
   private mergeReports(
     incomeReports: StatementReport[],
     balanceReports: StatementReport[],
     cashFlowReports: StatementReport[],
+    earningsReports: EarningsReport[],
   ): MergedStatementReport[] {
     // Create maps for quick lookup
     const incomeMap = new Map<string, StatementReport>();
     const balanceMap = new Map<string, StatementReport>();
     const cashFlowMap = new Map<string, StatementReport>();
+    const earningsMap = new Map<string, EarningsReport>();
 
     // Build lookup maps
     for (const report of incomeReports) {
@@ -332,17 +412,35 @@ export class AlphaVantageService {
       }
     }
 
+    for (const report of earningsReports) {
+      if (report.fiscalDateEnding) {
+        earningsMap.set(report.fiscalDateEnding, report);
+      }
+    }
+
     // Get all unique fiscal dates
-    const allDates = new Set<string>([...incomeMap.keys(), ...balanceMap.keys(), ...cashFlowMap.keys()]);
+    const allDates = new Set<string>([
+      ...incomeMap.keys(),
+      ...balanceMap.keys(),
+      ...cashFlowMap.keys(),
+      ...earningsMap.keys(),
+    ]);
 
     // Create merged reports
     const mergedReports: MergedStatementReport[] = [];
     for (const fiscalDateEnding of allDates) {
+      const earnings = earningsMap.get(fiscalDateEnding);
       mergedReports.push({
         fiscalDateEnding,
         incomeStatement: incomeMap.get(fiscalDateEnding) ?? null,
         balanceSheet: balanceMap.get(fiscalDateEnding) ?? null,
         cashFlow: cashFlowMap.get(fiscalDateEnding) ?? null,
+        ratio: earnings
+          ? {
+              fiscalDateEnding: earnings.fiscalDateEnding,
+              reportedEPS: earnings.reportedEPS ?? null,
+            }
+          : null,
       });
     }
 

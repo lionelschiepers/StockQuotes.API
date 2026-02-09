@@ -101,10 +101,79 @@ describe('AlphaVantageService', () => {
       ],
     };
 
+    const mockEarnings = {
+      symbol: 'IBM',
+      annualEarnings: [
+        {
+          fiscalDateEnding: '2023-12-31',
+          reportedEPS: '9.61',
+        },
+        {
+          fiscalDateEnding: '2022-12-31',
+          reportedEPS: '9.12',
+        },
+      ],
+      quarterlyEarnings: [
+        {
+          fiscalDateEnding: '2024-03-31',
+          reportedEPS: '1.68',
+        },
+      ],
+    };
+
+    const mockEarningsQuarterly = {
+      symbol: 'IBM',
+      annualEarnings: [
+        {
+          fiscalDateEnding: '2023-12-31',
+          reportedEPS: '9.61',
+        },
+        {
+          fiscalDateEnding: '2022-12-31',
+          reportedEPS: '9.12',
+        },
+        {
+          fiscalDateEnding: '2021-12-31',
+          reportedEPS: '9.97',
+        },
+        {
+          fiscalDateEnding: '2020-12-31',
+          reportedEPS: '8.67',
+        },
+        {
+          fiscalDateEnding: '2019-12-31',
+          reportedEPS: '12.81',
+        },
+      ],
+      quarterlyEarnings: [
+        {
+          fiscalDateEnding: '2024-03-31',
+          reportedEPS: '1.68',
+        },
+        {
+          fiscalDateEnding: '2023-12-31',
+          reportedEPS: '3.87',
+        },
+        {
+          fiscalDateEnding: '2023-09-30',
+          reportedEPS: '2.2',
+        },
+        {
+          fiscalDateEnding: '2023-06-30',
+          reportedEPS: '2.18',
+        },
+        {
+          fiscalDateEnding: '2023-03-31',
+          reportedEPS: '1.36',
+        },
+      ],
+    };
+
     it('should fetch and merge financial statements successfully', async () => {
       mockedAxios.get.mockResolvedValueOnce({ data: mockIncomeStatement });
       mockedAxios.get.mockResolvedValueOnce({ data: mockBalanceSheet });
       mockedAxios.get.mockResolvedValueOnce({ data: mockCashFlow });
+      mockedAxios.get.mockResolvedValueOnce({ data: mockEarnings });
 
       const result = await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
 
@@ -119,6 +188,10 @@ describe('AlphaVantageService', () => {
       expect(report2023?.incomeStatement).toEqual(mockIncomeStatement.annualReports[0]);
       expect(report2023?.balanceSheet).toEqual(mockBalanceSheet.annualReports[0]);
       expect(report2023?.cashFlow).toEqual(mockCashFlow.annualReports[0]);
+      expect(report2023?.ratio).toEqual({
+        fiscalDateEnding: '2023-12-31',
+        reportedEPS: '9.61',
+      });
     });
 
     it('should return cached data on cache hit', async () => {
@@ -126,15 +199,16 @@ describe('AlphaVantageService', () => {
       mockedAxios.get
         .mockResolvedValueOnce({ data: mockIncomeStatement })
         .mockResolvedValueOnce({ data: mockBalanceSheet })
-        .mockResolvedValueOnce({ data: mockCashFlow });
+        .mockResolvedValueOnce({ data: mockCashFlow })
+        .mockResolvedValueOnce({ data: mockEarnings });
 
       await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
 
       // Second call - should use cache
       const result = await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
 
-      // axios should only have been called 3 times total (not 6)
-      expect(mockedAxios.get).toHaveBeenCalledTimes(3);
+      // axios should only have been called 4 times total (not 8)
+      expect(mockedAxios.get).toHaveBeenCalledTimes(4);
       expect(result.cacheStatus).toBe('HIT');
     });
 
@@ -142,7 +216,8 @@ describe('AlphaVantageService', () => {
       mockedAxios.get
         .mockResolvedValueOnce({ data: { ...mockIncomeStatement, symbol: 'ibm' } })
         .mockResolvedValueOnce({ data: { ...mockBalanceSheet, symbol: 'ibm' } })
-        .mockResolvedValueOnce({ data: { ...mockCashFlow, symbol: 'ibm' } });
+        .mockResolvedValueOnce({ data: { ...mockCashFlow, symbol: 'ibm' } })
+        .mockResolvedValueOnce({ data: { ...mockEarnings, symbol: 'ibm' } });
 
       const result = await service.getFinancialStatements('ibm', undefined, undefined, undefined, mockContext);
 
@@ -174,7 +249,8 @@ describe('AlphaVantageService', () => {
       mockedAxios.get
         .mockResolvedValueOnce({ data: partialIncome })
         .mockResolvedValueOnce({ data: partialBalance })
-        .mockResolvedValueOnce({ data: partialCashFlow });
+        .mockResolvedValueOnce({ data: partialCashFlow })
+        .mockResolvedValueOnce({ data: mockEarnings });
 
       const result = await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
 
@@ -227,7 +303,8 @@ describe('AlphaVantageService', () => {
       mockedAxios.get
         .mockResolvedValueOnce({ data: unsortedIncome })
         .mockResolvedValueOnce({ data: unsortedBalance })
-        .mockResolvedValueOnce({ data: unsortedCashFlow });
+        .mockResolvedValueOnce({ data: unsortedCashFlow })
+        .mockResolvedValueOnce({ data: mockEarnings });
 
       const result = await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
 
@@ -365,7 +442,8 @@ describe('AlphaVantageService', () => {
         mockedAxios.get
           .mockResolvedValueOnce({ data: mockIncomeStatementLimit })
           .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
-          .mockResolvedValueOnce({ data: mockCashFlowLimit });
+          .mockResolvedValueOnce({ data: mockCashFlowLimit })
+          .mockResolvedValueOnce({ data: mockEarningsQuarterly });
 
         const result = await service.getFinancialStatements('IBM', undefined, 3, undefined, mockContext);
 
@@ -384,7 +462,8 @@ describe('AlphaVantageService', () => {
         mockedAxios.get
           .mockResolvedValueOnce({ data: mockIncomeStatementLimit })
           .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
-          .mockResolvedValueOnce({ data: mockCashFlowLimit });
+          .mockResolvedValueOnce({ data: mockCashFlowLimit })
+          .mockResolvedValueOnce({ data: mockEarningsQuarterly });
 
         const result = await service.getFinancialStatements('IBM', 'yearly', 2, undefined, mockContext);
 
@@ -398,7 +477,8 @@ describe('AlphaVantageService', () => {
         mockedAxios.get
           .mockResolvedValueOnce({ data: mockIncomeStatementLimit })
           .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
-          .mockResolvedValueOnce({ data: mockCashFlowLimit });
+          .mockResolvedValueOnce({ data: mockCashFlowLimit })
+          .mockResolvedValueOnce({ data: mockEarningsQuarterly });
 
         const result = await service.getFinancialStatements('IBM', 'quarterly', 4, undefined, mockContext);
 
@@ -412,7 +492,8 @@ describe('AlphaVantageService', () => {
         mockedAxios.get
           .mockResolvedValueOnce({ data: mockIncomeStatementLimit })
           .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
-          .mockResolvedValueOnce({ data: mockCashFlowLimit });
+          .mockResolvedValueOnce({ data: mockCashFlowLimit })
+          .mockResolvedValueOnce({ data: mockEarningsQuarterly });
 
         const result = await service.getFinancialStatements('IBM', undefined, 100, undefined, mockContext);
 
@@ -424,7 +505,8 @@ describe('AlphaVantageService', () => {
         mockedAxios.get
           .mockResolvedValueOnce({ data: mockIncomeStatementLimit })
           .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
-          .mockResolvedValueOnce({ data: mockCashFlowLimit });
+          .mockResolvedValueOnce({ data: mockCashFlowLimit })
+          .mockResolvedValueOnce({ data: mockEarningsQuarterly });
 
         const result = await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
 
@@ -437,9 +519,11 @@ describe('AlphaVantageService', () => {
           .mockResolvedValueOnce({ data: mockIncomeStatementLimit })
           .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
           .mockResolvedValueOnce({ data: mockCashFlowLimit })
+          .mockResolvedValueOnce({ data: mockEarningsQuarterly })
           .mockResolvedValueOnce({ data: mockIncomeStatementLimit })
           .mockResolvedValueOnce({ data: mockBalanceSheetLimit })
-          .mockResolvedValueOnce({ data: mockCashFlowLimit });
+          .mockResolvedValueOnce({ data: mockCashFlowLimit })
+          .mockResolvedValueOnce({ data: mockEarningsQuarterly });
 
         // First call with limit 2
         await service.getFinancialStatements('IBM', undefined, 2, undefined, mockContext);
@@ -447,8 +531,8 @@ describe('AlphaVantageService', () => {
         // Second call with limit 4 - should fetch new data (cache miss)
         const result = await service.getFinancialStatements('IBM', undefined, 4, undefined, mockContext);
 
-        // axios should have been called 6 times total (not 3)
-        expect(mockedAxios.get).toHaveBeenCalledTimes(6);
+        // axios should have been called 8 times total (not 4)
+        expect(mockedAxios.get).toHaveBeenCalledTimes(8);
         expect(result.annualReports).toHaveLength(4);
       });
     });
@@ -516,6 +600,7 @@ describe('AlphaVantageService', () => {
         mockedAxios.get.mockResolvedValueOnce({ data: mockIncomeStatement });
         mockedAxios.get.mockResolvedValueOnce({ data: mockBalanceSheet });
         mockedAxios.get.mockResolvedValueOnce({ data: mockCashFlow });
+        mockedAxios.get.mockResolvedValueOnce({ data: mockEarnings });
       });
 
       it('should filter fields from all statements', async () => {
@@ -527,26 +612,27 @@ describe('AlphaVantageService', () => {
           mockContext,
         );
 
-        expect(result.annualReports).toHaveLength(1);
-        const report = result.annualReports[0];
+        // Now there are 2 reports: one with all statements and one with only ratio data
+        expect(result.annualReports).toHaveLength(2);
 
-        // fiscalDateEnding should always be present
-        expect(report.fiscalDateEnding).toBe('2023-12-31');
+        // The first report should be 2023 with full data
+        const report2023 = result.annualReports.find((r) => r.fiscalDateEnding === '2023-12-31');
+        expect(report2023).toBeDefined();
 
         // Only grossProfit should be in incomeStatement (plus fiscalDateEnding)
-        expect(report.incomeStatement).toEqual({
+        expect(report2023?.incomeStatement).toEqual({
           fiscalDateEnding: '2023-12-31',
           grossProfit: '500000',
         });
 
         // Only totalAssets should be in balanceSheet (plus fiscalDateEnding)
-        expect(report.balanceSheet).toEqual({
+        expect(report2023?.balanceSheet).toEqual({
           fiscalDateEnding: '2023-12-31',
           totalAssets: '5000000',
         });
 
         // cashFlow should only have fiscalDateEnding since no fields were requested
-        expect(report.cashFlow).toEqual({
+        expect(report2023?.cashFlow).toEqual({
           fiscalDateEnding: '2023-12-31',
         });
       });
@@ -578,7 +664,8 @@ describe('AlphaVantageService', () => {
         mockedAxios.get
           .mockResolvedValueOnce({ data: mockIncomeStatement })
           .mockResolvedValueOnce({ data: mockBalanceSheet })
-          .mockResolvedValueOnce({ data: mockCashFlow });
+          .mockResolvedValueOnce({ data: mockCashFlow })
+          .mockResolvedValueOnce({ data: mockEarnings });
 
         // First call with fields
         await freshService.getFinancialStatements(
@@ -593,7 +680,8 @@ describe('AlphaVantageService', () => {
         mockedAxios.get
           .mockResolvedValueOnce({ data: mockIncomeStatement })
           .mockResolvedValueOnce({ data: mockBalanceSheet })
-          .mockResolvedValueOnce({ data: mockCashFlow });
+          .mockResolvedValueOnce({ data: mockCashFlow })
+          .mockResolvedValueOnce({ data: mockEarnings });
 
         // Second call with different fields - should be a cache miss
         const result2 = await freshService.getFinancialStatements(
