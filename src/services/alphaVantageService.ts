@@ -430,17 +430,25 @@ export class AlphaVantageService {
     const mergedReports: MergedStatementReport[] = [];
     for (const fiscalDateEnding of allDates) {
       const earnings = earningsMap.get(fiscalDateEnding);
+      const incomeStatement = incomeMap.get(fiscalDateEnding) ?? null;
+      const balanceSheet = balanceMap.get(fiscalDateEnding) ?? null;
+      const cashFlow = cashFlowMap.get(fiscalDateEnding) ?? null;
+
+      // Only set ratio if at least one statement section exists
+      const hasStatements = incomeStatement !== null || balanceSheet !== null || cashFlow !== null;
+
       mergedReports.push({
         fiscalDateEnding,
-        incomeStatement: incomeMap.get(fiscalDateEnding) ?? null,
-        balanceSheet: balanceMap.get(fiscalDateEnding) ?? null,
-        cashFlow: cashFlowMap.get(fiscalDateEnding) ?? null,
-        ratio: earnings
-          ? {
-              fiscalDateEnding: earnings.fiscalDateEnding,
-              reportedEPS: earnings.reportedEPS ?? null,
-            }
-          : null,
+        incomeStatement,
+        balanceSheet,
+        cashFlow,
+        ratio:
+          hasStatements && earnings
+            ? {
+                fiscalDateEnding: earnings.fiscalDateEnding,
+                reportedEPS: earnings.reportedEPS ?? null,
+              }
+            : null,
       });
     }
 
@@ -449,7 +457,14 @@ export class AlphaVantageService {
       return new Date(b.fiscalDateEnding).getTime() - new Date(a.fiscalDateEnding).getTime();
     });
 
-    return mergedReports;
+    // Filter out entries where all sections are null
+    return mergedReports.filter(
+      (report) =>
+        report.incomeStatement !== null ||
+        report.balanceSheet !== null ||
+        report.cashFlow !== null ||
+        report.ratio !== null,
+    );
   }
 
   validateTicker(ticker: string): { isValid: boolean; error?: string } {

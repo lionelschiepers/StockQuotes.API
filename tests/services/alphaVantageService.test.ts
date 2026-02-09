@@ -269,6 +269,79 @@ describe('AlphaVantageService', () => {
       expect(report2022?.cashFlow).toBeTruthy();
     });
 
+    it('should filter out entries when all statement sections are null', async () => {
+      const emptyStatements = {
+        symbol: 'IBM',
+        annualReports: [],
+        quarterlyReports: [],
+      };
+
+      // Use mockEarningsQuarterly which has only one entry to avoid confusion
+      const singleEarnings = {
+        symbol: 'IBM',
+        annualEarnings: [
+          {
+            fiscalDateEnding: '2023-12-31',
+            reportedEPS: '9.61',
+          },
+        ],
+        quarterlyEarnings: [],
+      };
+
+      mockedAxios.get
+        .mockResolvedValueOnce({ data: emptyStatements })
+        .mockResolvedValueOnce({ data: emptyStatements })
+        .mockResolvedValueOnce({ data: emptyStatements })
+        .mockResolvedValueOnce({ data: singleEarnings });
+
+      const result = await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
+
+      // Entries with all null sections should be filtered out
+      expect(result.annualReports).toHaveLength(0);
+    });
+
+    it('should set ratio when statements exist', async () => {
+      const partialIncome = {
+        symbol: 'IBM',
+        annualReports: [{ fiscalDateEnding: '2023-12-31', totalRevenue: '1000000' }],
+        quarterlyReports: [],
+      };
+
+      const emptyStatements = {
+        symbol: 'IBM',
+        annualReports: [],
+        quarterlyReports: [],
+      };
+
+      // Use single earnings to match
+      const singleEarnings = {
+        symbol: 'IBM',
+        annualEarnings: [
+          {
+            fiscalDateEnding: '2023-12-31',
+            reportedEPS: '9.61',
+          },
+        ],
+        quarterlyEarnings: [],
+      };
+
+      mockedAxios.get
+        .mockResolvedValueOnce({ data: partialIncome })
+        .mockResolvedValueOnce({ data: emptyStatements })
+        .mockResolvedValueOnce({ data: emptyStatements })
+        .mockResolvedValueOnce({ data: singleEarnings });
+
+      const result = await service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext);
+
+      expect(result.annualReports).toHaveLength(1);
+      const report = result.annualReports[0];
+      expect(report.incomeStatement).toBeTruthy(); // Has data
+      expect(report.balanceSheet).toBeNull();
+      expect(report.cashFlow).toBeNull();
+      expect(report.ratio).toBeTruthy(); // Should be set since incomeStatement exists
+      expect(report.ratio?.reportedEPS).toBe('9.61');
+    });
+
     it('should sort reports by date descending', async () => {
       const unsortedIncome = {
         symbol: 'IBM',
@@ -612,10 +685,10 @@ describe('AlphaVantageService', () => {
           mockContext,
         );
 
-        // Now there are 2 reports: one with all statements and one with only ratio data
-        expect(result.annualReports).toHaveLength(2);
+        // Only 1 report: 2022-12-31 with only ratio data is filtered out
+        expect(result.annualReports).toHaveLength(1);
 
-        // The first report should be 2023 with full data
+        // The report should be 2023 with full data
         const report2023 = result.annualReports.find((r) => r.fiscalDateEnding === '2023-12-31');
         expect(report2023).toBeDefined();
 
