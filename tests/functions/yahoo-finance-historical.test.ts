@@ -183,14 +183,15 @@ describe('yahooFinanceHistoricalHandler', () => {
     const response = await yahooFinanceHistoricalHandler(request, mockContext);
 
     expect(response.headers).toHaveProperty('ETag');
-    expect((response.headers as Record<string, string>)['ETag']).toMatch(/^"[A-Za-z0-9+/]+="$/);
+    expect((response.headers as Record<string, string>)['ETag']).toMatch(/^"[A-Za-z0-9+/]+={0,2}"$/);
   });
 
   it('should return 304 Not Modified when If-None-Match matches ETag', async () => {
     mockYahooFinanceService.validateHistoricalRequest.mockReturnValue({ isValid: true });
 
     // Calculate expected ETag
-    const cacheKey = 'hist:AAPL:2024-01-01:2024-01-02:1d:all';
+    const today = new Date().toISOString().split('T')[0];
+    const cacheKey = `hist:${today}:AAPL:2024-01-01:2024-01-02:1d:all`;
     const expectedETag = `"${Buffer.from(cacheKey).toString('base64')}"`;
 
     const request = mockRequest(
@@ -233,6 +234,6 @@ describe('yahooFinanceHistoricalHandler', () => {
     expect(response.status).toBeUndefined();
     expect(response.jsonBody).toEqual(cachedData);
     expect(response.headers).toHaveProperty('ETag');
-    expect((response.headers as Record<string, string>)['ETag']).toMatch(/^"[A-Za-z0-9+/]+="$/);
+    expect((response.headers as Record<string, string>)['ETag']).toMatch(/^"[A-Za-z0-9+/]+={0,2}"$/);
   });
 });

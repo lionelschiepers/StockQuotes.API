@@ -33,6 +33,9 @@ ENV AzureFunctionsJobHost__Logging__Console__IsEnabled=true
 ARG ALPHAVANTAGE_API_KEY
 ENV ALPHAVANTAGE_API_KEY=${ALPHAVANTAGE_API_KEY}
 
+ENV CACHE_ENABLED=true
+ENV CACHE_PERSISTENCE_ENABLED=true
+
 # Security hardening - update packages and install only necessary tools
  RUN apt-get update && \
      apt-get upgrade -y && \

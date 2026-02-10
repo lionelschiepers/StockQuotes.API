@@ -62,7 +62,8 @@ export async function yahooFinanceHistoricalHandler(
     }
 
     // Check cache first
-    const cacheKey = `hist:${ticker}:${from}:${to}:${interval ?? '1d'}:${fields ? [...fields].sort().join(',') : 'all'}`;
+    const today = new Date().toISOString().split('T')[0];
+    const cacheKey = `hist:${today}:${ticker}:${from}:${to}:${interval ?? '1d'}:${fields ? [...fields].sort().join(',') : 'all'}`;
     const etag = `"${Buffer.from(cacheKey).toString('base64')}"`;
 
     // Check for conditional request (ETag match)

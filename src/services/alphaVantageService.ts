@@ -77,50 +77,33 @@ export class AlphaVantageService {
       throw new Error(validation.error);
     }
 
-    // Check cache first - include period, limit, and fields in cache key
-    const cacheKey = this.buildCacheKey(normalizedTicker, period, limitStatements, fields);
-    const cachedData = this.cache.get<FinancialStatementsResponse>(cacheKey);
+    // Build cache key for this ticker and date
+    const date = new Date().toISOString().split('T')[0];
+    const cacheKey = `statements-${date}-${normalizedTicker}`;
 
-    if (cachedData) {
+    // Try to get data from cache
+    let fullData = this.cache.get<Omit<FinancialStatementsResponse, 'cacheStatus'>>(cacheKey);
+    let cacheStatus: 'HIT' | 'MISS' = 'HIT';
+
+    if (!fullData) {
       context.log(
-        `Cache hit for ${normalizedTicker}${period ? ` (${period})` : ''}${limitStatements ? ` (limit:${limitStatements})` : ''}${fields ? ` (fields:${fields.length})` : ''}`,
+        `Cache miss for ${normalizedTicker}${period ? ` (${period})` : ''}${limitStatements ? ` (limit:${limitStatements})` : ''}${fields ? ` (fields:${fields.length})` : ''}, fetching from API`,
       );
-      return { ...cachedData, cacheStatus: 'HIT' };
+
+      // Fetch from API and store full data in cache
+      fullData = await this.fetchFromApi(normalizedTicker, context);
+      this.cache.set(cacheKey, fullData);
+      cacheStatus = 'MISS';
+    } else {
+      context.log(`Cache hit for ${normalizedTicker}, applying filters`);
     }
 
-    context.log(
-      `Cache miss for ${normalizedTicker}${period ? ` (${period})` : ''}${limitStatements ? ` (limit:${limitStatements})` : ''}${fields ? ` (fields:${fields.length})` : ''}, fetching from API`,
-    );
-
-    // Fetch from API (without limit or fields - we want full data in cache for flexibility)
-    const data = await this.fetchFromApi(normalizedTicker, context);
-
-    // Filter data based on period
-    const filteredData = this.filterByPeriod(data, period);
-
-    // Apply statement limit
+    // Apply filters to the cached data
+    const filteredData = this.filterByPeriod(fullData, period);
     const limitedData = this.applyStatementLimit(filteredData, limitStatements);
-
-    // Apply field filtering
     const fieldFilteredData = this.applyFieldFilter(limitedData, fields);
 
-    // Store in cache
-    this.cache.set(cacheKey, fieldFilteredData);
-
-    return { ...fieldFilteredData, cacheStatus: 'MISS' };
-  }
-
-  private buildCacheKey(
-    ticker: string,
-    period: 'yearly' | 'quarterly' | undefined,
-    limitStatements: number | undefined,
-    fields: string[] | undefined,
-  ): string {
-    const parts = ['statements', ticker];
-    if (period) parts.push(period);
-    if (limitStatements) parts.push(`limit${limitStatements}`);
-    if (fields && fields.length > 0) parts.push(`fields:${fields.join(',')}`);
-    return parts.join(':');
+    return { ...fieldFilteredData, cacheStatus };
   }
 
   private applyStatementLimit(

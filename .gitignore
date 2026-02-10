@@ -49,3 +49,6 @@ Thumbs.db
 Thumbs.db
 .gemini/
 gha-creds-*.json
+
+# Cache
+.cache/

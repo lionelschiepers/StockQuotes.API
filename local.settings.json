@@ -5,7 +5,8 @@
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "ALPHAVANTAGE_API_KEY": "demo",
     "CACHE_TTL_SECONDS": "86400",
-    "CACHE_ENABLED": "true"
+    "CACHE_ENABLED": "true",
+    "CACHE_PERSISTENCE_ENABLED": "true"
   },
   "Host": {
     "LocalHttpPort": 7071,
