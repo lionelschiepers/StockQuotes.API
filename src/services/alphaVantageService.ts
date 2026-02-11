@@ -221,20 +221,20 @@ export class AlphaVantageService {
     }
 
     try {
-      // Free tier Alpha Vantage API limit: 2 requests per second
+      // Free tier Alpha Vantage API limit: 1 request per second
       // Make sequential requests with delay to respect rate limit
       const incomeResponse = await this.fetchStatement(ticker, 'INCOME_STATEMENT', context);
 
-      // Wait 600ms before next request (stays under 2 req/sec limit)
-      await this.delay(600);
+      // Wait 1000ms before next request (stays under 1 req/sec limit)
+      await this.delay(1100);
       const balanceResponse = await this.fetchStatement(ticker, 'BALANCE_SHEET', context);
 
-      // Wait 600ms before next request
-      await this.delay(600);
+      // Wait 1000ms before next request
+      await this.delay(1100);
       const cashFlowResponse = await this.fetchStatement(ticker, 'CASH_FLOW', context);
 
-      // Wait 600ms before next request
-      await this.delay(600);
+      // Wait 1000ms before next request
+      await this.delay(1100);
       const earningsResponse = await this.fetchEarnings(ticker, context);
 
       // Validate responses
