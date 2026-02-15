@@ -10,7 +10,7 @@ jest.mock('../../src/di/container');
 jest.mock('../../src/services/rateLimiter');
 
 const mockGetServiceContainer = getServiceContainer as jest.Mock;
-const mockApiRateLimiter = apiRateLimiter as unknown as { isAllowed: jest.Mock };
+const mockApiRateLimiter = apiRateLimiter as unknown as { isAllowed: jest.Mock; getMaxRequests: jest.Mock };
 
 describe('statementsHandler', () => {
   let mockContext: InvocationContext;
@@ -54,10 +54,11 @@ describe('statementsHandler', () => {
       cacheService: mockCacheService,
     });
 
+    mockApiRateLimiter.getMaxRequests.mockReturnValue(10);
     mockApiRateLimiter.isAllowed.mockReturnValue({
       allowed: true,
-      remaining: 99,
-      resetTime: Date.now() + 60000,
+      remaining: 9,
+      resetTime: Date.now() + 1000,
     });
   });
 
@@ -132,7 +133,7 @@ describe('statementsHandler', () => {
       const response = await statementsHandler(request, mockContext);
 
       expect(response.headers).toMatchObject({
-        'X-RateLimit-Limit': '100',
+        'X-RateLimit-Limit': '10',
         'X-RateLimit-Remaining': '50',
         'X-RateLimit-Reset': new Date(1234567890000).toISOString(),
       });

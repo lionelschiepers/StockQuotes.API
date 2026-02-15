@@ -18,6 +18,10 @@ class RateLimiter {
     cleanupInterval.unref();
   }
 
+  getMaxRequests(): number {
+    return this.maxRequests;
+  }
+
   isAllowed(identifier: string): { allowed: boolean; remaining: number; resetTime: number } {
     const now = Date.now();
     const entry = this.requests.get(identifier);
@@ -66,5 +70,5 @@ class RateLimiter {
 }
 
 // Export singleton instances with different limits
-export const apiRateLimiter = new RateLimiter(60000, 100); // 100 requests per minute
-export const strictRateLimiter = new RateLimiter(60000, 20); // 20 requests per minute for heavy endpoints
+export const apiRateLimiter = new RateLimiter(1000, 10); // 10 requests per second
+export const strictRateLimiter = new RateLimiter(1000, 2); // 2 requests per second for heavy endpoints

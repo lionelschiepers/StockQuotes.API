@@ -11,7 +11,7 @@ jest.mock('../../src/services/rateLimiter');
 jest.mock('../../src/services/cacheService');
 
 const mockGetServiceContainer = getServiceContainer as jest.Mock;
-const mockStrictRateLimiter = strictRateLimiter as unknown as { isAllowed: jest.Mock };
+const mockStrictRateLimiter = strictRateLimiter as unknown as { isAllowed: jest.Mock; getMaxRequests: jest.Mock };
 const mockCacheService = cacheService as unknown as { get: jest.Mock; set: jest.Mock };
 
 describe('yahooFinanceHistoricalHandler', () => {
@@ -46,10 +46,11 @@ describe('yahooFinanceHistoricalHandler', () => {
       yahooFinanceService: mockYahooFinanceService,
     });
 
+    mockStrictRateLimiter.getMaxRequests.mockReturnValue(2);
     mockStrictRateLimiter.isAllowed.mockReturnValue({
       allowed: true,
-      remaining: 19,
-      resetTime: Date.now() + 60000,
+      remaining: 1,
+      resetTime: Date.now() + 1000,
     });
 
     mockCacheService.get.mockReturnValue(null);

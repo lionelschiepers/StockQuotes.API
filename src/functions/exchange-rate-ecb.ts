@@ -25,7 +25,7 @@ export async function exchangeRateEcbHandler(
           retryAfter: Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000),
         },
         headers: {
-          'X-RateLimit-Limit': '100',
+          'X-RateLimit-Limit': apiRateLimiter.getMaxRequests().toString(),
           'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
           'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
           'Retry-After': Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000).toString(),
@@ -51,7 +51,7 @@ export async function exchangeRateEcbHandler(
         'Access-Control-Allow-Origin': '*',
         'Content-Type': response.contentType,
         'Cache-Control': 'max-age=3600',
-        'X-RateLimit-Limit': '100',
+        'X-RateLimit-Limit': apiRateLimiter.getMaxRequests().toString(),
         'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
         'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
       },

@@ -18,7 +18,7 @@ function buildErrorResponse(
     status,
     jsonBody: { error, message },
     headers: {
-      'X-RateLimit-Limit': '100',
+      'X-RateLimit-Limit': apiRateLimiter.getMaxRequests().toString(),
       'X-RateLimit-Remaining': rateLimit.remaining.toString(),
       'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
     },
@@ -101,7 +101,7 @@ export async function statementsHandler(request: HttpRequest, context: Invocatio
           retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
         },
         headers: {
-          'X-RateLimit-Limit': '100',
+          'X-RateLimit-Limit': apiRateLimiter.getMaxRequests().toString(),
           'X-RateLimit-Remaining': rateLimit.remaining.toString(),
           'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
           'Retry-After': Math.ceil((rateLimit.resetTime - Date.now()) / 1000).toString(),
@@ -177,7 +177,7 @@ export async function statementsHandler(request: HttpRequest, context: Invocatio
         'Content-Type': 'application/json',
         'Cache-Control': 'max-age=86400',
         'X-Cache': response.cacheStatus,
-        'X-RateLimit-Limit': '100',
+        'X-RateLimit-Limit': apiRateLimiter.getMaxRequests().toString(),
         'X-RateLimit-Remaining': rateLimit.remaining.toString(),
         'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
       },

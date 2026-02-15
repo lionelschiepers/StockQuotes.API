@@ -15,7 +15,7 @@ function buildHeaders(rateLimit: RateLimitResult, etag: string, cacheStatus?: 'H
     'Access-Control-Allow-Origin': '*',
     'Cache-Control': 'max-age=3600',
     ETag: etag,
-    'X-RateLimit-Limit': '20',
+    'X-RateLimit-Limit': strictRateLimiter.getMaxRequests().toString(),
     'X-RateLimit-Remaining': rateLimit.remaining.toString(),
     'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
   };
@@ -80,7 +80,7 @@ export async function yahooFinanceHistoricalHandler(
           retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
         },
         headers: {
-          'X-RateLimit-Limit': '20',
+          'X-RateLimit-Limit': strictRateLimiter.getMaxRequests().toString(),
           'X-RateLimit-Remaining': rateLimit.remaining.toString(),
           'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
           'Retry-After': Math.ceil((rateLimit.resetTime - Date.now()) / 1000).toString(),

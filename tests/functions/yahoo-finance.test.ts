@@ -7,7 +7,7 @@ jest.mock('../../src/di/container');
 jest.mock('../../src/services/rateLimiter');
 
 const mockGetServiceContainer = getServiceContainer as jest.Mock;
-const mockStrictRateLimiter = strictRateLimiter as unknown as { isAllowed: jest.Mock };
+const mockStrictRateLimiter = strictRateLimiter as unknown as { isAllowed: jest.Mock; getMaxRequests: jest.Mock };
 
 const mockYahooFinanceService = {
   getQuotes: jest.fn(),
@@ -42,10 +42,11 @@ describe('yahooFinanceHandler', () => {
       error: jest.fn(),
     } as unknown as InvocationContext;
 
+    mockStrictRateLimiter.getMaxRequests.mockReturnValue(2);
     mockStrictRateLimiter.isAllowed.mockReturnValue({
       allowed: true,
-      remaining: 19,
-      resetTime: Date.now() + 60000,
+      remaining: 1,
+      resetTime: Date.now() + 1000,
     });
   });
 

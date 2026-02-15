@@ -25,7 +25,7 @@ export async function yahooFinanceHandler(request: HttpRequest, context: Invocat
           retryAfter: Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000),
         },
         headers: {
-          'X-RateLimit-Limit': '20',
+          'X-RateLimit-Limit': strictRateLimiter.getMaxRequests().toString(),
           'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
           'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
           'Retry-After': Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000).toString(),
@@ -75,7 +75,7 @@ export async function yahooFinanceHandler(request: HttpRequest, context: Invocat
         'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'max-age=120',
         'Content-Type': 'application/json',
-        'X-RateLimit-Limit': '20',
+        'X-RateLimit-Limit': strictRateLimiter.getMaxRequests().toString(),
         'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
         'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
       },
