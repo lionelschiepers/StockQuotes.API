@@ -58,7 +58,12 @@ export class YahooFinanceService {
           `Fetching quotes for symbols: ${request.symbols.join(',')} with fields: ${request.fields?.join(',') ?? 'all'}`,
         );
 
-        const response = await this.yahooFinance.quote(request.symbols, { fields: request.fields });
+        const options: { fields?: string[] } = {};
+        if (request.fields && request.fields.length > 0) {
+          options.fields = request.fields;
+        }
+
+        const response = await this.yahooFinance.quote(request.symbols, options);
 
         context.log(`Successfully retrieved quotes for ${request.symbols.length} symbols`);
         return response;

@@ -43,6 +43,22 @@ describe('YahooFinanceService', () => {
       expect(mockContext.log).toHaveBeenCalledWith('Successfully retrieved quotes for 2 symbols');
     });
 
+    it('should call yahoo.quote without fields option when fields is not provided', async () => {
+      const request = {
+        symbols: ['AAPL'],
+      };
+      const expectedResponse = {
+        AAPL: { regularMarketPrice: 150 },
+      };
+
+      mockYahooFinance.quote.mockResolvedValue(expectedResponse);
+
+      const response = await service.getQuotes(request, mockContext);
+
+      expect(mockYahooFinance.quote).toHaveBeenCalledWith(request.symbols, {});
+      expect(response).toEqual(expectedResponse);
+    });
+
     it('should throw an error and log it when yahoo.quote fails', async () => {
       const request = {
         symbols: ['FAIL'],
