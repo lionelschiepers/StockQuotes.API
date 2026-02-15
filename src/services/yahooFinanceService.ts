@@ -21,6 +21,7 @@ export interface YahooFinanceResponse {
 export class YahooFinanceService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private readonly yahooFinance: any;
+  private static queue: Promise<void> = Promise.resolve();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(yahooFinance?: any) {
@@ -37,81 +38,100 @@ export class YahooFinanceService {
       });
   }
 
+  private async enqueue<T>(task: () => Promise<T>): Promise<T> {
+    // Append the new task to the chain
+    const result = YahooFinanceService.queue.then(task);
+
+    // Update the queue to wait for this task (even if it fails)
+    YahooFinanceService.queue = result.then(
+      () => {},
+      () => {},
+    );
+
+    return result;
+  }
+
   async getQuotes(request: YahooFinanceQuoteRequest, context: InvocationContext): Promise<YahooFinanceResponse> {
-    try {
-      context.log(`Fetching quotes for symbols: ${request.symbols.join(',')} with fields: ${request.fields?.join(',') ?? 'all'}`);
+    return this.enqueue(async () => {
+      try {
+        context.log(
+          `Fetching quotes for symbols: ${request.symbols.join(',')} with fields: ${request.fields?.join(',') ?? 'all'}`,
+        );
 
-      const response = await this.yahooFinance.quote(request.symbols, { fields: request.fields });
+        const response = await this.yahooFinance.quote(request.symbols, { fields: request.fields });
 
-      context.log(`Successfully retrieved quotes for ${request.symbols.length} symbols`);
-      return response;
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      context.error(`Error fetching quotes from Yahoo Finance: ${errorMessage}`, error);
-      throw error;
-    }
+        context.log(`Successfully retrieved quotes for ${request.symbols.length} symbols`);
+        return response;
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        context.error(`Error fetching quotes from Yahoo Finance: ${errorMessage}`, error);
+        throw error;
+      }
+    });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getHistoricalData(request: YahooFinanceHistoricalRequest, context: InvocationContext): Promise<any> {
-    try {
-      const interval = request.interval === '1w' ? '1wk' : (request.interval ?? '1d');
-      context.log(
-        `Fetching historical data for ticker: ${request.ticker} from ${request.from} to ${request.to} with interval: ${interval}`,
-      );
+    return this.enqueue(async () => {
+      try {
+        const interval = request.interval === '1w' ? '1wk' : (request.interval ?? '1d');
+        context.log(
+          `Fetching historical data for ticker: ${request.ticker} from ${request.from} to ${request.to} with interval: ${interval}`,
+        );
 
-      const response = await this.yahooFinance.chart(request.ticker, {
-        period1: request.from,
-        period2: request.to,
-        interval,
-      });
+        const response = await this.yahooFinance.chart(request.ticker, {
+          period1: request.from,
+          period2: request.to,
+          interval,
+        });
 
-      if (response?.quotes && Array.isArray(response.quotes)) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        response.quotes = response.quotes.map((quote: any) => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { adjclose, ...rest } = quote;
+        if (response?.quotes && Array.isArray(response.quotes)) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const processedQuote: any = {
-            date: rest.date,
-          };
-
-          const priceFields = ['open', 'high', 'low', 'close'];
-          priceFields.forEach((field) => {
-            if (typeof rest[field] === 'number') {
-              processedQuote[field] = Math.round(rest[field] * 100) / 100;
-            } else {
-              processedQuote[field] = rest[field];
-            }
-          });
-
-          if (Object.prototype.hasOwnProperty.call(rest, 'volume')) {
-            processedQuote.volume = rest.volume;
-          }
-
-          // Filter fields if requested
-          if (request.fields && request.fields.length > 0) {
+          response.quotes = response.quotes.map((quote: any) => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { adjclose, ...rest } = quote;
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const filtered: any = { date: processedQuote.date };
-            request.fields.forEach((f) => {
-              if (Object.prototype.hasOwnProperty.call(processedQuote, f)) {
-                filtered[f] = processedQuote[f];
+            const processedQuote: any = {
+              date: rest.date,
+            };
+
+            const priceFields = ['open', 'high', 'low', 'close'];
+            priceFields.forEach((field) => {
+              if (typeof rest[field] === 'number') {
+                processedQuote[field] = Math.round(rest[field] * 100) / 100;
+              } else {
+                processedQuote[field] = rest[field];
               }
             });
-            return filtered;
-          }
 
-          return processedQuote;
-        });
+            if (Object.hasOwn(rest, 'volume')) {
+              processedQuote.volume = rest.volume;
+            }
+
+            // Filter fields if requested
+            if (request.fields && request.fields.length > 0) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const filtered: any = { date: processedQuote.date };
+              request.fields.forEach((f) => {
+                if (Object.hasOwn(processedQuote, f)) {
+                  filtered[f] = processedQuote[f];
+                }
+              });
+              return filtered;
+            }
+
+            return processedQuote;
+          });
+        }
+
+        context.log(`Successfully retrieved historical data for ${request.ticker}`);
+        return response;
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        context.error(`Error fetching historical data from Yahoo Finance: ${errorMessage}`, error);
+        throw error;
       }
-
-      context.log(`Successfully retrieved historical data for ${request.ticker}`);
-      return response;
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      context.error(`Error fetching historical data from Yahoo Finance: ${errorMessage}`, error);
-      throw error;
-    }
+    });
   }
 
   validateQuoteRequest(symbols: string[], fields?: string[]): { isValid: boolean; error?: string } {
@@ -140,6 +160,27 @@ export class YahooFinanceService {
     }
 
     return { isValid: true };
+  }
+
+  private getIntervalLimit(interval: string): { maxRangeDays: number; intervalName: string } {
+    const intradayIntervals = ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h'];
+    const isIntraday = intradayIntervals.includes(interval);
+
+    if (isIntraday) {
+      return { maxRangeDays: 7, intervalName: 'intraday' };
+    }
+
+    switch (interval) {
+      case '1wk':
+        return { maxRangeDays: 365 * 50, intervalName: 'weekly' };
+      case '1d':
+        return { maxRangeDays: 365 * 5, intervalName: 'daily' };
+      case '1mo':
+      case '3mo':
+        return { maxRangeDays: 365 * 50, intervalName: 'monthly' };
+      default:
+        return { maxRangeDays: 365, intervalName: 'other' };
+    }
   }
 
   validateHistoricalRequest(
@@ -179,11 +220,11 @@ export class YahooFinanceService {
     const fromDate = new Date(from);
     const toDate = new Date(to);
 
-    if (isNaN(fromDate.getTime())) {
+    if (Number.isNaN(fromDate.getTime())) {
       return { isValid: false, error: 'Invalid from date' };
     }
 
-    if (isNaN(toDate.getTime())) {
+    if (Number.isNaN(toDate.getTime())) {
       return { isValid: false, error: 'Invalid to date' };
     }
 
@@ -191,36 +232,12 @@ export class YahooFinanceService {
       return { isValid: false, error: 'From date must be before or equal to to date' };
     }
 
-    // Calculate date range limits based on interval
     const normalizedInterval = interval === '1w' ? '1wk' : (interval ?? '1d');
     const rangeDays = (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24);
-
-    // Intraday intervals (less than 1 day) are limited to 1 week
-    const intradayIntervals = ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h'];
-    const isIntraday = intradayIntervals.includes(normalizedInterval);
-
-    let maxRangeDays: number;
-    let intervalName: string;
-
-    if (isIntraday) {
-      maxRangeDays = 7; // 1 week for intraday intervals
-      intervalName = 'intraday';
-    } else if (normalizedInterval === '1wk') {
-      maxRangeDays = 365 * 50; // 50 years for weekly
-      intervalName = 'weekly';
-    } else if (normalizedInterval === '1d') {
-      maxRangeDays = 365 * 5; // 5 years for daily
-      intervalName = 'daily';
-    } else if (normalizedInterval === '1mo' || normalizedInterval === '3mo') {
-      maxRangeDays = 365 * 50; // 50 years for monthly intervals
-      intervalName = 'monthly';
-    } else {
-      maxRangeDays = 365; // 1 year for other intervals
-      intervalName = 'other';
-    }
+    const { maxRangeDays, intervalName } = this.getIntervalLimit(normalizedInterval);
 
     if (rangeDays > maxRangeDays) {
-      if (isIntraday) {
+      if (intervalName === 'intraday') {
         return {
           isValid: false,
           error: `Date range exceeds maximum of 7 days for intraday interval "${normalizedInterval}"`,

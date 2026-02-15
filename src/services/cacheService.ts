@@ -1,5 +1,5 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 // In-memory cache service with TTL support and optional disk persistence
 interface CacheEntry<T> {
@@ -9,7 +9,7 @@ interface CacheEntry<T> {
 
 export class CacheService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private cache: Map<string, CacheEntry<any>>;
+  private readonly cache: Map<string, CacheEntry<any>>;
   private readonly ttlMs: number;
   private readonly enabled: boolean;
   private readonly persistenceEnabled: boolean;
@@ -17,7 +17,7 @@ export class CacheService {
 
   constructor() {
     this.cache = new Map();
-    const ttlSeconds = parseInt(process.env.CACHE_TTL_SECONDS ?? '86400', 10);
+    const ttlSeconds = Number.parseInt(process.env.CACHE_TTL_SECONDS ?? '86400', 10);
     this.ttlMs = ttlSeconds * 1000;
     this.enabled = process.env.CACHE_ENABLED !== 'false';
     this.persistenceEnabled = process.env.CACHE_PERSISTENCE_ENABLED === 'true';
@@ -45,8 +45,33 @@ export class CacheService {
   }
 
   private getCacheFilePath(key: string): string {
-    const sanitizedKey = key.replace(/[:|]/g, '-').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const sanitizedKey = key.replaceAll(/[:|]/g, '-').replaceAll(/[^a-zA-Z0-9._-]/g, '_');
     return path.join(this.cacheDir, `${sanitizedKey}.json`);
+  }
+
+  private loadFromDisk<T>(key: string): CacheEntry<T> | null {
+    if (!this.persistenceEnabled) {
+      return null;
+    }
+    const filePath = this.getCacheFilePath(key);
+    try {
+      if (fs.existsSync(filePath)) {
+        const fileData = fs.readFileSync(filePath, 'utf8');
+        const entry = JSON.parse(fileData) as CacheEntry<T>;
+        if (entry && !this.isEntryExpired(entry)) {
+          this.cache.set(key, entry);
+          return entry;
+        }
+        this.deleteDiskEntry(key);
+      }
+    } catch {
+      // Ignore read errors
+    }
+    return null;
+  }
+
+  private isEntryExpired(entry: CacheEntry<unknown>): boolean {
+    return Date.now() > entry.timestamp + this.ttlMs;
   }
 
   get<T>(key: string): T | null {
@@ -54,39 +79,12 @@ export class CacheService {
       return null;
     }
 
-    // Try in-memory first
-    let entry = this.cache.get(key);
+    const entry = this.cache.get(key) ?? this.loadFromDisk<T>(key);
 
-    // Try disk if not in-memory and persistence is enabled
-    if (!entry && this.persistenceEnabled) {
-      const filePath = this.getCacheFilePath(key);
-      try {
-        if (fs.existsSync(filePath)) {
-          const fileData = fs.readFileSync(filePath, 'utf8');
-          entry = JSON.parse(fileData);
-          if (entry) {
-            // Check if disk entry is expired before putting in memory
-            const now = Date.now();
-            if (now > entry.timestamp + this.ttlMs) {
-              this.deleteDiskEntry(key);
-              return null;
-            }
-            // Put back into memory
-            this.cache.set(key, entry);
-          }
-        }
-      } catch {
-        // Ignore read errors, treat as miss
-        return null;
+    if (!entry || this.isEntryExpired(entry)) {
+      if (entry) {
+        this.delete(key);
       }
-    }
-
-    if (!entry) {
-      return null;
-    }
-
-    if (this.isExpired(key)) {
-      this.delete(key);
       return null;
     }
 
@@ -138,30 +136,8 @@ export class CacheService {
       return false;
     }
 
-    if (this.cache.has(key)) {
-      return !this.isExpired(key);
-    }
-
-    if (this.persistenceEnabled) {
-      const filePath = this.getCacheFilePath(key);
-      if (fs.existsSync(filePath)) {
-        // We could read it to check expiry, or just return true and let get() handle it
-        // For has(), we'll check expiry to be accurate
-        try {
-          const fileData = fs.readFileSync(filePath, 'utf8');
-          const entry = JSON.parse(fileData);
-          const now = Date.now();
-          if (now <= entry.timestamp + this.ttlMs) {
-            return true;
-          }
-          this.deleteDiskEntry(key);
-        } catch {
-          return false;
-        }
-      }
-    }
-
-    return false;
+    const entry = this.cache.get(key) ?? this.loadFromDisk(key);
+    return !!entry && !this.isEntryExpired(entry);
   }
 
   isExpired(key: string): boolean {
@@ -171,8 +147,7 @@ export class CacheService {
       return true;
     }
 
-    const now = Date.now();
-    return now > entry.timestamp + this.ttlMs;
+    return this.isEntryExpired(entry);
   }
 
   private delete(key: string): void {
@@ -193,38 +168,39 @@ export class CacheService {
     }
   }
 
+  private cleanupDisk(now: number): void {
+    try {
+      if (!fs.existsSync(this.cacheDir)) {
+        return;
+      }
+      const files = fs.readdirSync(this.cacheDir);
+      for (const file of files) {
+        if (file.endsWith('.json')) {
+          const filePath = path.join(this.cacheDir, file);
+          const stats = fs.statSync(filePath);
+          if (now > stats.mtimeMs + this.ttlMs) {
+            fs.unlinkSync(filePath);
+          }
+        }
+      }
+    } catch {
+      // Ignore disk cleanup errors
+    }
+  }
+
   private cleanup(): void {
     const now = Date.now();
 
     // Cleanup memory
-    const keysToDelete: string[] = [];
     for (const [key, entry] of this.cache.entries()) {
-      if (now > entry.timestamp + this.ttlMs) {
-        keysToDelete.push(key);
+      if (this.isEntryExpired(entry)) {
+        this.delete(key);
       }
-    }
-    for (const key of keysToDelete) {
-      this.delete(key);
     }
 
     // Cleanup disk (optional, could be expensive if many files)
-    if (this.persistenceEnabled && fs.existsSync(this.cacheDir)) {
-      try {
-        const files = fs.readdirSync(this.cacheDir);
-        for (const file of files) {
-          if (file.endsWith('.json')) {
-            const filePath = path.join(this.cacheDir, file);
-            const stats = fs.statSync(filePath);
-            // This is a bit of a heuristic since we'd need to parse JSON to get exact timestamp
-            // but file mtime is a good proxy
-            if (now > stats.mtimeMs + this.ttlMs) {
-              fs.unlinkSync(filePath);
-            }
-          }
-        }
-      } catch {
-        // Ignore disk cleanup errors
-      }
+    if (this.persistenceEnabled) {
+      this.cleanupDisk(now);
     }
   }
 }

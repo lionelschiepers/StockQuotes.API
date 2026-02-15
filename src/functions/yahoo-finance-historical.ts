@@ -4,40 +4,90 @@ import { getServiceContainer } from '../di/container';
 import { strictRateLimiter } from '../services/rateLimiter';
 import { cacheService } from '../services/cacheService';
 
-// sample call: http://localhost:7071/api/yahoo-finance-historical?ticker=MSFT&from=2024-01-01&to=2024-12-31
+interface RateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  resetTime: number;
+}
+
+function buildHeaders(rateLimit: RateLimitResult, etag: string, cacheStatus?: 'HIT' | 'MISS') {
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control': 'max-age=3600',
+    ETag: etag,
+    'X-RateLimit-Limit': '20',
+    'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+    'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
+  };
+
+  if (cacheStatus) {
+    headers['X-Cache'] = cacheStatus;
+    headers['Content-Type'] = 'application/json';
+  }
+
+  return headers;
+}
+
+function handleHistoricalError(error: unknown, context: InvocationContext): HttpResponseInit {
+  context.error('Error in yahooFinanceHistoricalHandler:', error);
+
+  if (error && typeof error === 'object') {
+    const errObj = error as Record<string, unknown>;
+    if (errObj.response && typeof errObj.response === 'object') {
+      const response = errObj.response as Record<string, unknown>;
+      return {
+        status: (response.status as number) ?? 502,
+        jsonBody: {
+          error: 'External API error',
+          message: (response.statusText as string) ?? 'Unknown error',
+          status: response.status,
+        },
+      };
+    }
+    if (errObj.code === 'ECONNABORTED' || errObj.code === 'ETIMEDOUT') {
+      return {
+        status: 408,
+        jsonBody: { error: 'Request timeout', message: 'External service is not responding' },
+      };
+    }
+  }
+
+  return {
+    status: 500,
+    jsonBody: {
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'An unexpected error occurred',
+    },
+  };
+}
+
 export async function yahooFinanceHistoricalHandler(
   request: HttpRequest,
   context: InvocationContext,
 ): Promise<HttpResponseInit> {
   context.log('HTTP trigger YahooFinanceHistorical launched');
 
-  const { yahooFinanceService } = getServiceContainer();
-
   try {
-    // Extract client IP for rate limiting
     const clientIp = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown';
+    const rateLimit = strictRateLimiter.isAllowed(clientIp);
 
-    // Apply rate limiting
-    const rateLimitResult = strictRateLimiter.isAllowed(clientIp);
-
-    if (!rateLimitResult.allowed) {
+    if (!rateLimit.allowed) {
       return {
         status: 429,
         jsonBody: {
           error: 'Too many requests',
           message: 'Rate limit exceeded. Please try again later.',
-          retryAfter: Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000),
+          retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
         },
         headers: {
           'X-RateLimit-Limit': '20',
-          'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-          'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
-          'Retry-After': Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000).toString(),
+          'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+          'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
+          'Retry-After': Math.ceil((rateLimit.resetTime - Date.now()) / 1000).toString(),
         },
       };
     }
 
-    // Validate input parameters
     const ticker = request.query.get('ticker');
     const from = request.query.get('from');
     const to = request.query.get('to');
@@ -46,118 +96,41 @@ export async function yahooFinanceHistoricalHandler(
     const fields = fieldsParam ? fieldsParam.split(/[|,]/).filter((f) => f.length > 0) : undefined;
 
     if (!ticker) {
-      return {
-        status: 400,
-        jsonBody: { error: 'Missing required parameter: ticker' },
-      };
+      return { status: 400, jsonBody: { error: 'Missing required parameter: ticker' } };
     }
 
-    // Validate request using service
+    const { yahooFinanceService } = getServiceContainer();
     const validation = yahooFinanceService.validateHistoricalRequest(ticker, from ?? '', to ?? '', interval, fields);
     if (!validation.isValid) {
-      return {
-        status: 400,
-        jsonBody: { error: validation.error },
-      };
+      return { status: 400, jsonBody: { error: validation.error } };
     }
 
-    // Check cache first
     const today = new Date().toISOString().split('T')[0];
-    const cacheKey = `hist:${today}:${ticker}:${from}:${to}:${interval ?? '1d'}:${fields ? [...fields].sort().join(',') : 'all'}`;
+    const sortedFields = fields ? [...fields].sort((a, b) => a.localeCompare(b)).join(',') : 'all';
+    const cacheKey = `hist:${today}:${ticker}:${from}:${to}:${interval ?? '1d'}:${sortedFields}`;
     const etag = `"${Buffer.from(cacheKey).toString('base64')}"`;
 
-    // Check for conditional request (ETag match)
-    const ifNoneMatch = request.headers.get('If-None-Match');
-    if (ifNoneMatch === etag) {
+    if (request.headers.get('If-None-Match') === etag) {
       context.log(`ETag match for ${cacheKey}, returning 304`);
-      return {
-        status: 304,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Cache-Control': 'max-age=3600',
-          ETag: etag,
-          'X-RateLimit-Limit': '20',
-          'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-          'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
-        },
-      };
+      return { status: 304, headers: buildHeaders(rateLimit, etag) };
     }
 
     const cached = cacheService.get<unknown>(cacheKey);
     if (cached) {
       context.log(`Cache hit for ${cacheKey}`);
-      return {
-        jsonBody: cached,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Cache-Control': 'max-age=3600',
-          'Content-Type': 'application/json',
-          ETag: etag,
-          'X-Cache': 'HIT',
-          'X-RateLimit-Limit': '20',
-          'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-          'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
-        },
-      };
+      return { jsonBody: cached, headers: buildHeaders(rateLimit, etag, 'HIT') };
     }
 
-    const responseMessage = await yahooFinanceService.getHistoricalData(
+    const data = await yahooFinanceService.getHistoricalData(
       { ticker, from: from!, to: to!, interval, fields },
       context,
     );
-
-    // Store in cache
-    cacheService.set(cacheKey, responseMessage);
+    cacheService.set(cacheKey, data);
     context.log(`Cache stored for ${cacheKey}`);
 
-    return {
-      jsonBody: responseMessage,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'max-age=3600',
-        'Content-Type': 'application/json',
-        ETag: etag,
-        'X-Cache': 'MISS',
-        'X-RateLimit-Limit': '20',
-        'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-        'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
-      },
-    };
+    return { jsonBody: data, headers: buildHeaders(rateLimit, etag, 'MISS') };
   } catch (error: unknown) {
-    context.error('Error in yahooFinanceHistoricalHandler:', error);
-
-    // Handle different error types
-    if (error && typeof error === 'object' && 'response' in error) {
-      const axiosError = error as { response?: { status?: number; statusText?: string } };
-      // External API error
-      return {
-        status: axiosError.response?.status ?? 502,
-        jsonBody: {
-          error: 'External API error',
-          message: axiosError.response?.statusText ?? 'Unknown error',
-          status: axiosError.response?.status,
-        },
-      };
-    } else if (error && typeof error === 'object' && 'code' in error) {
-      const nodeError = error as { code?: string };
-      if (nodeError.code === 'ECONNABORTED' || nodeError.code === 'ETIMEDOUT') {
-        // Timeout error
-        return {
-          status: 408,
-          jsonBody: { error: 'Request timeout', message: 'External service is not responding' },
-        };
-      }
-    }
-
-    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-    // Internal server error
-    return {
-      status: 500,
-      jsonBody: {
-        error: 'Internal server error',
-        message: errorMessage,
-      },
-    };
+    return handleHistoricalError(error, context);
   }
 }
 

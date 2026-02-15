@@ -1,6 +1,5 @@
 import type { HttpRequest, InvocationContext } from '@azure/functions';
 import { getServiceContainer } from '../../src/di/container';
-import type { YahooFinanceService } from '../../src/services/yahooFinanceService';
 import { strictRateLimiter } from '../../src/services/rateLimiter';
 
 // Mock the dependencies

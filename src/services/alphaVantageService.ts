@@ -52,7 +52,7 @@ export interface FinancialStatementsResponse {
 export class AlphaVantageService {
   private readonly apiKey: string;
   private readonly baseUrl: string;
-  private cache: CacheService;
+  private readonly cache: CacheService;
   private readonly timeout: number = 10000; // 10 seconds
 
   constructor(cache: CacheService = cacheService) {
@@ -85,17 +85,18 @@ export class AlphaVantageService {
     let fullData = this.cache.get<Omit<FinancialStatementsResponse, 'cacheStatus'>>(cacheKey);
     let cacheStatus: 'HIT' | 'MISS' = 'HIT';
 
-    if (!fullData) {
-      context.log(
-        `Cache miss for ${normalizedTicker}${period ? ` (${period})` : ''}${limitStatements ? ` (limit:${limitStatements})` : ''}${fields ? ` (fields:${fields.length})` : ''}, fetching from API`,
-      );
+    if (fullData) {
+      context.log(`Cache hit for ${normalizedTicker}, applying filters`);
+    } else {
+      const periodInfo = period ? ` (${period})` : '';
+      const limitInfo = limitStatements ? ` (limit:${limitStatements})` : '';
+      const fieldsInfo = fields ? ` (fields:${fields.length})` : '';
+      context.log(`Cache miss for ${normalizedTicker}${periodInfo}${limitInfo}${fieldsInfo}, fetching from API`);
 
       // Fetch from API and store full data in cache
       fullData = await this.fetchFromApi(normalizedTicker, context);
       this.cache.set(cacheKey, fullData);
       cacheStatus = 'MISS';
-    } else {
-      context.log(`Cache hit for ${normalizedTicker}, applying filters`);
     }
 
     // Apply filters to the cached data
@@ -134,7 +135,7 @@ export class AlphaVantageService {
       // fiscalDateEnding is handled separately
       if (fieldName === 'fiscalDateEnding') return false;
       const fullPath = `${statementType}.${fieldName}`;
-      return fields.some((f) => fullPath === f);
+      return fields.includes(fullPath);
     };
 
     // Filter a single report based on field paths
@@ -364,6 +365,16 @@ export class AlphaVantageService {
     }
   }
 
+  private buildReportMap<T extends { fiscalDateEnding: string }>(reports: T[]): Map<string, T> {
+    const map = new Map<string, T>();
+    for (const report of reports) {
+      if (report.fiscalDateEnding) {
+        map.set(report.fiscalDateEnding, report);
+      }
+    }
+    return map;
+  }
+
   private mergeReports(
     incomeReports: StatementReport[],
     balanceReports: StatementReport[],
@@ -371,35 +382,10 @@ export class AlphaVantageService {
     earningsReports: EarningsReport[],
   ): MergedStatementReport[] {
     // Create maps for quick lookup
-    const incomeMap = new Map<string, StatementReport>();
-    const balanceMap = new Map<string, StatementReport>();
-    const cashFlowMap = new Map<string, StatementReport>();
-    const earningsMap = new Map<string, EarningsReport>();
-
-    // Build lookup maps
-    for (const report of incomeReports) {
-      if (report.fiscalDateEnding) {
-        incomeMap.set(report.fiscalDateEnding, report);
-      }
-    }
-
-    for (const report of balanceReports) {
-      if (report.fiscalDateEnding) {
-        balanceMap.set(report.fiscalDateEnding, report);
-      }
-    }
-
-    for (const report of cashFlowReports) {
-      if (report.fiscalDateEnding) {
-        cashFlowMap.set(report.fiscalDateEnding, report);
-      }
-    }
-
-    for (const report of earningsReports) {
-      if (report.fiscalDateEnding) {
-        earningsMap.set(report.fiscalDateEnding, report);
-      }
-    }
+    const incomeMap = this.buildReportMap(incomeReports);
+    const balanceMap = this.buildReportMap(balanceReports);
+    const cashFlowMap = this.buildReportMap(cashFlowReports);
+    const earningsMap = this.buildReportMap(earningsReports);
 
     // Get all unique fiscal dates
     const allDates = new Set<string>([
@@ -410,8 +396,7 @@ export class AlphaVantageService {
     ]);
 
     // Create merged reports
-    const mergedReports: MergedStatementReport[] = [];
-    for (const fiscalDateEnding of allDates) {
+    const mergedReports: MergedStatementReport[] = Array.from(allDates).map((fiscalDateEnding) => {
       const earnings = earningsMap.get(fiscalDateEnding);
       const incomeStatement = incomeMap.get(fiscalDateEnding) ?? null;
       const balanceSheet = balanceMap.get(fiscalDateEnding) ?? null;
@@ -420,7 +405,7 @@ export class AlphaVantageService {
       // Only set ratio if at least one statement section exists
       const hasStatements = incomeStatement !== null || balanceSheet !== null || cashFlow !== null;
 
-      mergedReports.push({
+      return {
         fiscalDateEnding,
         incomeStatement,
         balanceSheet,
@@ -432,8 +417,8 @@ export class AlphaVantageService {
                 reportedEPS: earnings.reportedEPS ?? null,
               }
             : null,
-      });
-    }
+      };
+    });
 
     // Sort by date descending (most recent first)
     mergedReports.sort((a, b) => {
