@@ -44,21 +44,16 @@ export async function yahooFinanceHandler(request: HttpRequest, context: Invocat
       };
     }
 
-    if (!fieldsParam) {
-      return {
-        status: 400,
-        jsonBody: { error: 'Missing required parameter: fields' },
-      };
-    }
-
     const querySymbols = symbolsParam
       .split(',')
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
     const queryFields = fieldsParam
-      .split(',')
-      .map((f) => f.trim())
-      .filter((f) => f.length > 0);
+      ? fieldsParam
+          .split(',')
+          .map((f) => f.trim())
+          .filter((f) => f.length > 0)
+      : undefined;
 
     // Validate request using service
     const validation = yahooFinanceService.validateQuoteRequest(querySymbols, queryFields);

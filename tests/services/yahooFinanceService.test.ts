@@ -198,10 +198,14 @@ describe('YahooFinanceService', () => {
       expect(result.error).toBe('At least one symbol must be provided');
     });
 
-    it('should return isValid: false if no fields are provided', () => {
+    it('should return isValid: true if no fields are provided', () => {
       const result = service.validateQuoteRequest(['AAPL'], []);
-      expect(result.isValid).toBe(false);
-      expect(result.error).toBe('At least one field must be provided');
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should return isValid: true if fields are undefined', () => {
+      const result = service.validateQuoteRequest(['AAPL']);
+      expect(result.isValid).toBe(true);
     });
 
     it('should return isValid: false for invalid symbols', () => {

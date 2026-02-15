@@ -3,7 +3,7 @@ import YahooFinance from 'yahoo-finance2';
 
 export interface YahooFinanceQuoteRequest {
   symbols: string[];
-  fields: string[];
+  fields?: string[];
 }
 
 export interface YahooFinanceHistoricalRequest {
@@ -39,7 +39,7 @@ export class YahooFinanceService {
 
   async getQuotes(request: YahooFinanceQuoteRequest, context: InvocationContext): Promise<YahooFinanceResponse> {
     try {
-      context.log(`Fetching quotes for symbols: ${request.symbols.join(',')} with fields: ${request.fields.join(',')}`);
+      context.log(`Fetching quotes for symbols: ${request.symbols.join(',')} with fields: ${request.fields?.join(',') ?? 'all'}`);
 
       const response = await this.yahooFinance.quote(request.symbols, { fields: request.fields });
 
@@ -114,32 +114,29 @@ export class YahooFinanceService {
     }
   }
 
-  validateQuoteRequest(symbols: string[], fields: string[]): { isValid: boolean; error?: string } {
+  validateQuoteRequest(symbols: string[], fields?: string[]): { isValid: boolean; error?: string } {
     if (!symbols || symbols.length === 0) {
       return { isValid: false, error: 'At least one symbol must be provided' };
     }
 
-    if (!fields || fields.length === 0) {
-      return { isValid: false, error: 'At least one field must be provided' };
-    }
-
     const validSymbols = symbols.filter((s) => s && s.trim().length > 0);
-    const validFields = fields.filter((f) => f && f.trim().length > 0);
 
     if (validSymbols.length !== symbols.length) {
       return { isValid: false, error: 'Invalid symbols provided' };
-    }
-
-    if (validFields.length !== fields.length) {
-      return { isValid: false, error: 'Invalid fields provided' };
     }
 
     if (validSymbols.length > 50) {
       return { isValid: false, error: 'Maximum 50 symbols allowed per request' };
     }
 
-    if (validFields.length > 20) {
-      return { isValid: false, error: 'Maximum 20 fields allowed per request' };
+    if (fields && fields.length > 0) {
+      const validFields = fields.filter((f) => f && f.trim().length > 0);
+      if (validFields.length !== fields.length) {
+        return { isValid: false, error: 'Invalid fields provided' };
+      }
+      if (validFields.length > 20) {
+        return { isValid: false, error: 'Maximum 20 fields allowed per request' };
+      }
     }
 
     return { isValid: true };
