@@ -26,12 +26,16 @@ describe('YahooFinanceService', () => {
         symbols: ['AAPL', 'GOOG'],
         fields: ['regularMarketPrice', 'marketCap'],
       };
-      const expectedResponse = {
-        AAPL: { regularMarketPrice: 150, marketCap: 2.5e12 },
-        GOOG: { regularMarketPrice: 2800, marketCap: 1.9e12 },
-      };
+      const rawResponse = [
+        { symbol: 'AAPL', regularMarketPrice: 150, marketCap: 2.5e12, other: 'field' },
+        { symbol: 'GOOG', regularMarketPrice: 2800, marketCap: 1.9e12, other: 'field' },
+      ];
+      const expectedResponse = [
+        { symbol: 'AAPL', regularMarketPrice: 150, marketCap: 2.5e12 },
+        { symbol: 'GOOG', regularMarketPrice: 2800, marketCap: 1.9e12 },
+      ];
 
-      mockYahooFinance.quote.mockResolvedValue(expectedResponse);
+      mockYahooFinance.quote.mockResolvedValue(rawResponse);
 
       const response = await service.getQuotes(request, mockContext);
 
@@ -47,9 +51,7 @@ describe('YahooFinanceService', () => {
       const request = {
         symbols: ['AAPL'],
       };
-      const expectedResponse = {
-        AAPL: { regularMarketPrice: 150 },
-      };
+      const expectedResponse = [{ symbol: 'AAPL', regularMarketPrice: 150 }];
 
       mockYahooFinance.quote.mockResolvedValue(expectedResponse);
 
@@ -57,6 +59,27 @@ describe('YahooFinanceService', () => {
 
       expect(mockYahooFinance.quote).toHaveBeenCalledWith(request.symbols, {});
       expect(response).toEqual(expectedResponse);
+    });
+
+    it('should filter fields and always include symbol in the response', async () => {
+      const request = {
+        symbols: ['AAPL', 'MSFT'],
+        fields: ['regularMarketPrice'],
+      };
+      // Simulating yahoo-finance2 returning more fields than requested
+      const rawResponse = [
+        { symbol: 'AAPL', regularMarketPrice: 150, marketCap: 2.5e12, someExtraField: 'extra' },
+        { symbol: 'MSFT', regularMarketPrice: 400, marketCap: 3.0e12, anotherExtraField: 'extra2' },
+      ];
+
+      mockYahooFinance.quote.mockResolvedValue(rawResponse);
+
+      const response = await service.getQuotes(request, mockContext);
+
+      expect(response).toEqual([
+        { symbol: 'AAPL', regularMarketPrice: 150 },
+        { symbol: 'MSFT', regularMarketPrice: 400 },
+      ]);
     });
 
     it('should throw an error and log it when yahoo.quote fails', async () => {

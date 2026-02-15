@@ -66,6 +66,33 @@ export class YahooFinanceService {
         const response = await this.yahooFinance.quote(request.symbols, options);
 
         context.log(`Successfully retrieved quotes for ${request.symbols.length} symbols`);
+
+        if (request.fields && request.fields.length > 0) {
+          const fields = request.fields;
+          if (Array.isArray(response)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return response.map((quote: any) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const filtered: any = { symbol: quote.symbol };
+              fields.forEach((f) => {
+                if (Object.hasOwn(quote, f)) {
+                  filtered[f] = quote[f];
+                }
+              });
+              return filtered;
+            });
+          } else {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const filtered: any = { symbol: response.symbol };
+            fields.forEach((f) => {
+              if (Object.hasOwn(response, f)) {
+                filtered[f] = response[f];
+              }
+            });
+            return filtered;
+          }
+        }
+
         return response;
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
