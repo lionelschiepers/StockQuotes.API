@@ -99,7 +99,7 @@ describe('YahooFinanceService', () => {
         ],
       };
 
-      mockYahooFinance.chart.mockResolvedValue(JSON.parse(JSON.stringify(expectedResponse)));
+      mockYahooFinance.chart.mockResolvedValue(structuredClone(expectedResponse));
 
       const response = await service.getHistoricalData(request, mockContext);
 

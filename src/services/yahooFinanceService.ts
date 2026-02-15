@@ -188,38 +188,16 @@ export class YahooFinanceService {
     }
   }
 
-  validateHistoricalRequest(
-    ticker: string,
+  private validateDates(
     from: string,
     to: string,
-    interval?: string,
-    fields?: string[],
-  ): { isValid: boolean; error?: string } {
-    if (!ticker || ticker.trim().length === 0) {
-      return { isValid: false, error: 'Ticker must be provided' };
-    }
-
+  ): { isValid: boolean; error?: string; fromDate?: Date; toDate?: Date } {
     if (!from || !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
       return { isValid: false, error: 'From date must be in yyyy-MM-dd format' };
     }
 
     if (!to || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
       return { isValid: false, error: 'To date must be in yyyy-MM-dd format' };
-    }
-
-    const validIntervals = ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '1w', '1wk', '1mo', '3mo'];
-    if (interval && !validIntervals.includes(interval)) {
-      return { isValid: false, error: 'Interval must be one of: ' + validIntervals.join(', ') };
-    }
-
-    if (fields && fields.length > 0) {
-      const invalidFields = fields.filter((f) => !f || f.trim().length === 0);
-      if (invalidFields.length > 0) {
-        return { isValid: false, error: 'Invalid fields provided' };
-      }
-      if (fields.length > 20) {
-        return { isValid: false, error: 'Maximum 20 fields allowed per request' };
-      }
     }
 
     const fromDate = new Date(from);
@@ -237,6 +215,10 @@ export class YahooFinanceService {
       return { isValid: false, error: 'From date must be before or equal to to date' };
     }
 
+    return { isValid: true, fromDate, toDate };
+  }
+
+  private validateRange(fromDate: Date, toDate: Date, interval?: string): { isValid: boolean; error?: string } {
     const normalizedInterval = interval === '1w' ? '1wk' : (interval ?? '1d');
     const rangeDays = (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24);
     const { maxRangeDays, intervalName } = this.getIntervalLimit(normalizedInterval);
@@ -256,5 +238,39 @@ export class YahooFinanceService {
     }
 
     return { isValid: true };
+  }
+
+  validateHistoricalRequest(
+    ticker: string,
+    from: string,
+    to: string,
+    interval?: string,
+    fields?: string[],
+  ): { isValid: boolean; error?: string } {
+    if (!ticker || ticker.trim().length === 0) {
+      return { isValid: false, error: 'Ticker must be provided' };
+    }
+
+    const validIntervals = ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '1w', '1wk', '1mo', '3mo'];
+    if (interval && !validIntervals.includes(interval)) {
+      return { isValid: false, error: 'Interval must be one of: ' + validIntervals.join(', ') };
+    }
+
+    if (fields && fields.length > 0) {
+      const invalidFields = fields.filter((f) => !f || f.trim().length === 0);
+      if (invalidFields.length > 0) {
+        return { isValid: false, error: 'Invalid fields provided' };
+      }
+      if (fields.length > 20) {
+        return { isValid: false, error: 'Maximum 20 fields allowed per request' };
+      }
+    }
+
+    const dateValidation = this.validateDates(from, to);
+    if (!dateValidation.isValid) {
+      return { isValid: false, error: dateValidation.error };
+    }
+
+    return this.validateRange(dateValidation.fromDate!, dateValidation.toDate!, interval);
   }
 }

@@ -34,11 +34,11 @@ describe('CacheService', () => {
     });
 
     it('should handle multiple keys independently', () => {
-      cacheService.set('key1', 'value1');
-      cacheService.set('key2', 'value2');
+      cacheService.set('independent-key-1', 'value1');
+      cacheService.set('independent-key-2', 'value2');
 
-      expect(cacheService.get('key1')).toBe('value1');
-      expect(cacheService.get('key2')).toBe('value2');
+      expect(cacheService.get('independent-key-1')).toBe('value1');
+      expect(cacheService.get('independent-key-2')).toBe('value2');
     });
 
     it('should overwrite existing key', () => {

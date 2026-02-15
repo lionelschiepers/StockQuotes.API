@@ -41,12 +41,10 @@ ENV CACHE_PERSISTENCE_ENABLED=true
      apt-get upgrade -y && \
      apt-get install -y --no-install-recommends curl ca-certificates && \
      rm -rf /var/lib/apt/lists/* && \
-     npm r -g npm
-
-# Create dedicated non-root user for security
-RUN useradd -m appuser && \
-    mkdir -p /home/site/wwwroot && \
-    chown appuser:appuser /home/site/wwwroot
+     npm r -g npm && \
+     useradd -m appuser && \
+     mkdir -p /home/site/wwwroot && \
+     chown appuser:appuser /home/site/wwwroot
 
 USER appuser
 

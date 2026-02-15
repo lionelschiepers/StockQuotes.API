@@ -51,8 +51,8 @@ describe('yahooFinanceHandler', () => {
 
   it('should return quotes for valid parameters including fields', async () => {
     const expectedData = { AAPL: { regularMarketPrice: 150 } };
-    (mockYahooFinanceService.validateQuoteRequest as jest.Mock).mockReturnValue({ isValid: true });
-    (mockYahooFinanceService.getQuotes as jest.Mock).mockResolvedValue(expectedData);
+    mockYahooFinanceService.validateQuoteRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getQuotes.mockResolvedValue(expectedData);
 
     const request = mockRequest({ symbols: 'AAPL', fields: 'regularMarketPrice' });
     const response = await yahooFinanceHandler(request, mockContext);
@@ -66,8 +66,8 @@ describe('yahooFinanceHandler', () => {
 
   it('should return quotes when fields are missing (optional fields)', async () => {
     const expectedData = { AAPL: { regularMarketPrice: 150, marketCap: 2e12 } };
-    (mockYahooFinanceService.validateQuoteRequest as jest.Mock).mockReturnValue({ isValid: true });
-    (mockYahooFinanceService.getQuotes as jest.Mock).mockResolvedValue(expectedData);
+    mockYahooFinanceService.validateQuoteRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getQuotes.mockResolvedValue(expectedData);
 
     const request = mockRequest({ symbols: 'AAPL' });
     const response = await yahooFinanceHandler(request, mockContext);
@@ -88,7 +88,7 @@ describe('yahooFinanceHandler', () => {
   });
 
   it('should return 400 if validation fails', async () => {
-    (mockYahooFinanceService.validateQuoteRequest as jest.Mock).mockReturnValue({
+    mockYahooFinanceService.validateQuoteRequest.mockReturnValue({
       isValid: false,
       error: 'Invalid symbols provided',
     });
@@ -115,8 +115,8 @@ describe('yahooFinanceHandler', () => {
   });
 
   it('should handle service errors', async () => {
-    (mockYahooFinanceService.validateQuoteRequest as jest.Mock).mockReturnValue({ isValid: true });
-    (mockYahooFinanceService.getQuotes as jest.Mock).mockRejectedValue(new Error('Service failure'));
+    mockYahooFinanceService.validateQuoteRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getQuotes.mockRejectedValue(new Error('Service failure'));
 
     const request = mockRequest({ symbols: 'AAPL' });
     const response = await yahooFinanceHandler(request, mockContext);
