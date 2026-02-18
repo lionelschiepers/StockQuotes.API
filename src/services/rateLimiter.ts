@@ -9,7 +9,7 @@ class RateLimiter {
   private readonly windowMs: number;
   private readonly maxRequests: number;
 
-  constructor(windowMs: number = 60000, maxRequests: number = 100) {
+  constructor(windowMs: number = 5000, maxRequests: number = 100) {
     this.windowMs = windowMs;
     this.maxRequests = maxRequests;
 
@@ -71,4 +71,4 @@ class RateLimiter {
 
 // Export singleton instances with different limits
 export const apiRateLimiter = new RateLimiter(1000, 10); // 10 requests per second
-export const strictRateLimiter = new RateLimiter(1000, 2); // 2 requests per second for heavy endpoints
+export const strictRateLimiter = new RateLimiter(1000, 4); // 4 requests per second for heavy endpoints
