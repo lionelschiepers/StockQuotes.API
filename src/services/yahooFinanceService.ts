@@ -14,6 +14,13 @@ export interface YahooFinanceHistoricalRequest {
   fields?: string[];
 }
 
+export interface YahooFinanceOptionsRequest {
+  ticker: string;
+  expirationDate?: string;
+  filter?: Array<'calls' | 'puts'>;
+  limit?: number;
+}
+
 export interface YahooFinanceResponse {
   [key: string]: unknown;
 }
@@ -304,5 +311,140 @@ export class YahooFinanceService {
     }
 
     return this.validateRange(dateValidation.fromDate!, dateValidation.toDate!, interval);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getOptions(request: YahooFinanceOptionsRequest, context: InvocationContext): Promise<any> {
+    return this.enqueue(async () => {
+      try {
+        context.log(`Fetching options for ticker: ${request.ticker}`);
+
+        const options: { date?: Date } = {};
+        if (request.expirationDate) {
+          options.date = new Date(request.expirationDate);
+        }
+
+        const response = await this.yahooFinance.options(request.ticker, options);
+
+        context.log(`Successfully retrieved options for ${request.ticker}`);
+
+        // Get the current market price for strike filtering
+        const marketPrice = response.quote?.regularMarketPrice ?? response.quote?.regularMarketDayHigh ?? 0;
+
+        // Apply filter to options data if specified
+        if (request.filter && request.filter.length > 0 && response.options && Array.isArray(response.options)) {
+          const includeCalls = request.filter.includes('calls');
+          const includePuts = request.filter.includes('puts');
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          response.options = response.options.map((opt: any) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const filteredOpt: any = {};
+            if (opt.expirationDate) {
+              filteredOpt.expirationDate = opt.expirationDate;
+            }
+            if (includeCalls && opt.calls) {
+              filteredOpt.calls = opt.calls;
+            }
+            if (includePuts && opt.puts) {
+              filteredOpt.puts = opt.puts;
+            }
+            return filteredOpt;
+          });
+        }
+
+        // Apply limit to filter strikes based on market price
+        if (
+          request.limit &&
+          request.limit > 0 &&
+          marketPrice > 0 &&
+          response.options &&
+          Array.isArray(response.options)
+        ) {
+          const limit = request.limit;
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          response.options = response.options.map((opt: any) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const limitedOpt: any = {};
+            if (opt.expirationDate) {
+              limitedOpt.expirationDate = opt.expirationDate;
+            }
+
+            // Filter calls: strikes ABOVE market price, closest first
+            if (opt.calls && opt.calls.length > 0) {
+              const validCalls = opt.calls.filter(
+                (call: any) => typeof call.strike === 'number' && call.strike > marketPrice,
+              );
+              // Sort by closest to market price (ascending)
+              validCalls.sort((a: { strike: number }, b: { strike: number }) => a.strike - b.strike);
+              limitedOpt.calls = validCalls.slice(0, limit);
+            }
+
+            // Filter puts: strikes BELOW market price, closest first
+            if (opt.puts && opt.puts.length > 0) {
+              const validPuts = opt.puts.filter(
+                (put: any) => typeof put.strike === 'number' && put.strike < marketPrice,
+              );
+              // Sort by closest to market price (descending, so closest comes first)
+              validPuts.sort((a: { strike: number }, b: { strike: number }) => b.strike - a.strike);
+              limitedOpt.puts = validPuts.slice(0, limit);
+            }
+
+            return limitedOpt;
+          });
+        }
+
+        return response;
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        context.error(`Error fetching options from Yahoo Finance: ${errorMessage}`, error);
+        throw error;
+      }
+    });
+  }
+
+  validateOptionsRequest(
+    ticker: string,
+    expirationDate?: string,
+    filter?: string[],
+    limit?: number,
+  ): { isValid: boolean; error?: string } {
+    if (!ticker || ticker.trim().length === 0) {
+      return { isValid: false, error: 'Ticker must be provided' };
+    }
+
+    if (expirationDate && !/^\d{4}-\d{2}-\d{2}$/.test(expirationDate)) {
+      return { isValid: false, error: 'Expiration date must be in yyyy-MM-dd format' };
+    }
+
+    if (expirationDate) {
+      const date = new Date(expirationDate);
+      if (Number.isNaN(date.getTime())) {
+        return { isValid: false, error: 'Invalid expiration date' };
+      }
+    }
+
+    if (filter && filter.length > 0) {
+      const validFilters = ['calls', 'puts'];
+      const invalidFilters = filter.filter((f) => !validFilters.includes(f));
+      if (invalidFilters.length > 0) {
+        return {
+          isValid: false,
+          error: `Invalid filter values: ${invalidFilters.join(', ')}. Valid values are: calls, puts`,
+        };
+      }
+    }
+
+    if (limit !== undefined) {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+        return {
+          isValid: false,
+          error: 'Limit must be an integer between 1 and 50',
+        };
+      }
+    }
+
+    return { isValid: true };
   }
 }
