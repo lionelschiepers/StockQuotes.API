@@ -1,7 +1,7 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import { app } from '@azure/functions';
 import { getServiceContainer } from '../di/container';
-import { strictRateLimiter } from '../services/rateLimiter';
+import { apiRateLimiter } from '../services/rateLimiter';
 import { cacheService } from '../services/cacheService';
 
 interface RateLimitResult {
@@ -15,7 +15,7 @@ function buildHeaders(rateLimit: RateLimitResult, etag: string, cacheStatus?: 'H
     'Access-Control-Allow-Origin': '*',
     'Cache-Control': 'max-age=300',
     ETag: etag,
-    'X-RateLimit-Limit': strictRateLimiter.getMaxRequests().toString(),
+    'X-RateLimit-Limit': apiRateLimiter.getMaxRequests().toString(),
     'X-RateLimit-Remaining': rateLimit.remaining.toString(),
     'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
   };
@@ -31,6 +31,11 @@ function buildHeaders(rateLimit: RateLimitResult, etag: string, cacheStatus?: 'H
 function handleOptionsError(error: unknown, context: InvocationContext): HttpResponseInit {
   context.error('Error in yahooFinanceOptionsHandler:', error);
 
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Content-Type': 'application/json',
+  };
+
   if (error && typeof error === 'object') {
     const errObj = error as Record<string, unknown>;
     if (errObj.response && typeof errObj.response === 'object') {
@@ -42,12 +47,14 @@ function handleOptionsError(error: unknown, context: InvocationContext): HttpRes
           message: (response.statusText as string) ?? 'Unknown error',
           status: response.status,
         },
+        headers: corsHeaders,
       };
     }
     if (errObj.code === 'ECONNABORTED' || errObj.code === 'ETIMEDOUT') {
       return {
         status: 408,
         jsonBody: { error: 'Request timeout', message: 'External service is not responding' },
+        headers: corsHeaders,
       };
     }
   }
@@ -58,6 +65,7 @@ function handleOptionsError(error: unknown, context: InvocationContext): HttpRes
       error: 'Internal server error',
       message: error instanceof Error ? error.message : 'An unexpected error occurred',
     },
+    headers: corsHeaders,
   };
 }
 
@@ -69,7 +77,7 @@ export async function yahooFinanceOptionsHandler(
 
   try {
     const clientIp = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown';
-    const rateLimit = strictRateLimiter.isAllowed(clientIp);
+    const rateLimit = apiRateLimiter.isAllowed(clientIp);
 
     if (!rateLimit.allowed) {
       return {
@@ -80,7 +88,9 @@ export async function yahooFinanceOptionsHandler(
           retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
         },
         headers: {
-          'X-RateLimit-Limit': strictRateLimiter.getMaxRequests().toString(),
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json',
+          'X-RateLimit-Limit': apiRateLimiter.getMaxRequests().toString(),
           'X-RateLimit-Remaining': rateLimit.remaining.toString(),
           'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
           'Retry-After': Math.ceil((rateLimit.resetTime - Date.now()) / 1000).toString(),
@@ -100,14 +110,27 @@ export async function yahooFinanceOptionsHandler(
     const limitParam = request.query.get('limit');
     const limit = limitParam ? Number.parseInt(limitParam, 10) : undefined;
 
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Content-Type': 'application/json',
+    };
+
     if (!ticker) {
-      return { status: 400, jsonBody: { error: 'Missing required parameter: ticker' } };
+      return {
+        status: 400,
+        jsonBody: { error: 'Missing required parameter: ticker' },
+        headers: corsHeaders,
+      };
     }
 
     const { yahooFinanceService } = getServiceContainer();
     const validation = yahooFinanceService.validateOptionsRequest(ticker, expirationDate, filter, limit);
     if (!validation.isValid) {
-      return { status: 400, jsonBody: { error: validation.error } };
+      return {
+        status: 400,
+        jsonBody: { error: validation.error },
+        headers: corsHeaders,
+      };
     }
 
     const today = new Date().toISOString().split('T')[0];

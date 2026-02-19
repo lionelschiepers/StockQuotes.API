@@ -29,6 +29,8 @@ export class YahooFinanceService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private readonly yahooFinance: any;
   private static queue: Promise<void> = Promise.resolve();
+  private static activeCount = 0;
+  private static readonly maxConcurrent = 2;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(yahooFinance?: any) {
@@ -46,16 +48,19 @@ export class YahooFinanceService {
   }
 
   private async enqueue<T>(task: () => Promise<T>): Promise<T> {
-    // Append the new task to the chain
-    const result = YahooFinanceService.queue.then(task);
+    // Wait until we have a slot available (max 2 concurrent)
+    while (YahooFinanceService.activeCount >= YahooFinanceService.maxConcurrent) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
 
-    // Update the queue to wait for this task (even if it fails)
-    YahooFinanceService.queue = result.then(
-      () => {},
-      () => {},
-    );
+    YahooFinanceService.activeCount++;
 
-    return result;
+    try {
+      const result = await task();
+      return result;
+    } finally {
+      YahooFinanceService.activeCount--;
+    }
   }
 
   async getQuotes(request: YahooFinanceQuoteRequest, context: InvocationContext): Promise<YahooFinanceResponse> {
