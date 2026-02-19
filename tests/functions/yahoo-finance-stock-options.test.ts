@@ -75,7 +75,43 @@ describe('yahooFinanceOptionsHandler', () => {
 
     expect(response.jsonBody).toEqual(expectedData);
     expect(mockYahooFinanceService.getOptions).toHaveBeenCalledWith(
-      { ticker: 'AAPL', expirationDate: undefined, filter: undefined, limit: undefined },
+      {
+        ticker: 'AAPL',
+        expirationDate: undefined,
+        expirationDatesCount: undefined,
+        filter: undefined,
+        limit: undefined,
+      },
+      mockContext,
+    );
+  });
+
+  it('should return options data with expirationDatesCount', async () => {
+    const expectedData = {
+      underlyingSymbol: 'AAPL',
+      expirationDates: [new Date('2025-03-21'), new Date('2025-03-28')],
+      strikes: [150, 155, 160],
+      options: [
+        { expirationDate: new Date('2025-03-21'), calls: [], puts: [] },
+        { expirationDate: new Date('2025-03-28'), calls: [], puts: [] },
+      ],
+    };
+    mockYahooFinanceService.validateOptionsRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getOptions.mockResolvedValue(expectedData);
+
+    const request = mockRequest({ ticker: 'AAPL', expirationDatesCount: '2' });
+    const response = await yahooFinanceOptionsHandler(request, mockContext);
+
+    expect(response.jsonBody).toEqual(expectedData);
+    expect(mockYahooFinanceService.validateOptionsRequest).toHaveBeenCalledWith(
+      'AAPL',
+      undefined,
+      2,
+      undefined,
+      undefined,
+    );
+    expect(mockYahooFinanceService.getOptions).toHaveBeenCalledWith(
+      { ticker: 'AAPL', expirationDate: undefined, expirationDatesCount: 2, filter: undefined, limit: undefined },
       mockContext,
     );
   });
@@ -97,11 +133,18 @@ describe('yahooFinanceOptionsHandler', () => {
     expect(mockYahooFinanceService.validateOptionsRequest).toHaveBeenCalledWith(
       'AAPL',
       undefined,
+      undefined,
       ['calls'],
       undefined,
     );
     expect(mockYahooFinanceService.getOptions).toHaveBeenCalledWith(
-      { ticker: 'AAPL', expirationDate: undefined, filter: ['calls'], limit: undefined },
+      {
+        ticker: 'AAPL',
+        expirationDate: undefined,
+        expirationDatesCount: undefined,
+        filter: ['calls'],
+        limit: undefined,
+      },
       mockContext,
     );
   });
@@ -120,9 +163,21 @@ describe('yahooFinanceOptionsHandler', () => {
     const response = await yahooFinanceOptionsHandler(request, mockContext);
 
     expect(response.jsonBody).toEqual(expectedData);
-    expect(mockYahooFinanceService.validateOptionsRequest).toHaveBeenCalledWith('AAPL', undefined, ['puts'], undefined);
+    expect(mockYahooFinanceService.validateOptionsRequest).toHaveBeenCalledWith(
+      'AAPL',
+      undefined,
+      undefined,
+      ['puts'],
+      undefined,
+    );
     expect(mockYahooFinanceService.getOptions).toHaveBeenCalledWith(
-      { ticker: 'AAPL', expirationDate: undefined, filter: ['puts'], limit: undefined },
+      {
+        ticker: 'AAPL',
+        expirationDate: undefined,
+        expirationDatesCount: undefined,
+        filter: ['puts'],
+        limit: undefined,
+      },
       mockContext,
     );
   });
@@ -144,11 +199,18 @@ describe('yahooFinanceOptionsHandler', () => {
     expect(mockYahooFinanceService.validateOptionsRequest).toHaveBeenCalledWith(
       'AAPL',
       undefined,
+      undefined,
       ['calls', 'puts'],
       undefined,
     );
     expect(mockYahooFinanceService.getOptions).toHaveBeenCalledWith(
-      { ticker: 'AAPL', expirationDate: undefined, filter: ['calls', 'puts'], limit: undefined },
+      {
+        ticker: 'AAPL',
+        expirationDate: undefined,
+        expirationDatesCount: undefined,
+        filter: ['calls', 'puts'],
+        limit: undefined,
+      },
       mockContext,
     );
   });
@@ -182,7 +244,13 @@ describe('yahooFinanceOptionsHandler', () => {
 
     expect(response.jsonBody).toEqual(expectedData);
     expect(mockYahooFinanceService.getOptions).toHaveBeenCalledWith(
-      { ticker: 'AAPL', expirationDate: '2025-03-21', filter: undefined, limit: undefined },
+      {
+        ticker: 'AAPL',
+        expirationDate: '2025-03-21',
+        expirationDatesCount: undefined,
+        filter: undefined,
+        limit: undefined,
+      },
       mockContext,
     );
   });
@@ -202,9 +270,15 @@ describe('yahooFinanceOptionsHandler', () => {
     const response = await yahooFinanceOptionsHandler(request, mockContext);
 
     expect(response.jsonBody).toEqual(expectedData);
-    expect(mockYahooFinanceService.validateOptionsRequest).toHaveBeenCalledWith('AAPL', undefined, undefined, 4);
+    expect(mockYahooFinanceService.validateOptionsRequest).toHaveBeenCalledWith(
+      'AAPL',
+      undefined,
+      undefined,
+      undefined,
+      4,
+    );
     expect(mockYahooFinanceService.getOptions).toHaveBeenCalledWith(
-      { ticker: 'AAPL', expirationDate: undefined, filter: undefined, limit: 4 },
+      { ticker: 'AAPL', expirationDate: undefined, expirationDatesCount: undefined, filter: undefined, limit: 4 },
       mockContext,
     );
   });
@@ -224,9 +298,15 @@ describe('yahooFinanceOptionsHandler', () => {
     const response = await yahooFinanceOptionsHandler(request, mockContext);
 
     expect(response.jsonBody).toEqual(expectedData);
-    expect(mockYahooFinanceService.validateOptionsRequest).toHaveBeenCalledWith('AAPL', undefined, ['calls'], 2);
+    expect(mockYahooFinanceService.validateOptionsRequest).toHaveBeenCalledWith(
+      'AAPL',
+      undefined,
+      undefined,
+      ['calls'],
+      2,
+    );
     expect(mockYahooFinanceService.getOptions).toHaveBeenCalledWith(
-      { ticker: 'AAPL', expirationDate: undefined, filter: ['calls'], limit: 2 },
+      { ticker: 'AAPL', expirationDate: undefined, expirationDatesCount: undefined, filter: ['calls'], limit: 2 },
       mockContext,
     );
   });
@@ -242,6 +322,32 @@ describe('yahooFinanceOptionsHandler', () => {
 
     expect(response.status).toBe(400);
     expect(response.jsonBody).toEqual({ error: 'Limit must be an integer between 1 and 50' });
+  });
+
+  it('should return 400 for invalid expirationDatesCount value', async () => {
+    mockYahooFinanceService.validateOptionsRequest.mockReturnValue({
+      isValid: false,
+      error: 'expirationDatesCount must be an integer between 1 and 12',
+    });
+
+    const request = mockRequest({ ticker: 'AAPL', expirationDatesCount: '20' });
+    const response = await yahooFinanceOptionsHandler(request, mockContext);
+
+    expect(response.status).toBe(400);
+    expect(response.jsonBody).toEqual({ error: 'expirationDatesCount must be an integer between 1 and 12' });
+  });
+
+  it('should return 400 if both expirationDate and expirationDatesCount are provided', async () => {
+    mockYahooFinanceService.validateOptionsRequest.mockReturnValue({
+      isValid: false,
+      error: 'Cannot specify both expirationDate and expirationDatesCount',
+    });
+
+    const request = mockRequest({ ticker: 'AAPL', expirationDate: '2025-03-21', expirationDatesCount: '2' });
+    const response = await yahooFinanceOptionsHandler(request, mockContext);
+
+    expect(response.status).toBe(400);
+    expect(response.jsonBody).toEqual({ error: 'Cannot specify both expirationDate and expirationDatesCount' });
   });
 
   it('should return 400 if ticker is missing', async () => {
@@ -302,7 +408,7 @@ describe('yahooFinanceOptionsHandler', () => {
     mockYahooFinanceService.validateOptionsRequest.mockReturnValue({ isValid: true });
 
     const today = new Date().toISOString().split('T')[0];
-    const cacheKey = `options:${today}:AAPL:all:all:all`;
+    const cacheKey = `options:${today}:AAPL:all:all:all:all`;
     const etag = `"${Buffer.from(cacheKey).toString('base64')}"`;
 
     const request = mockRequest({ ticker: 'AAPL' }, { 'If-None-Match': etag });

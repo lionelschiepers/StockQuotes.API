@@ -100,6 +100,8 @@ export async function yahooFinanceOptionsHandler(
 
     const ticker = request.query.get('ticker');
     const expirationDate = request.query.get('expirationDate') ?? undefined;
+    const expirationDatesCountParam = request.query.get('expirationDatesCount');
+    const expirationDatesCount = expirationDatesCountParam ? Number.parseInt(expirationDatesCountParam, 10) : undefined;
     const filterParam = request.query.get('filter');
     const filter = filterParam
       ? filterParam
@@ -124,7 +126,13 @@ export async function yahooFinanceOptionsHandler(
     }
 
     const { yahooFinanceService } = getServiceContainer();
-    const validation = yahooFinanceService.validateOptionsRequest(ticker, expirationDate, filter, limit);
+    const validation = yahooFinanceService.validateOptionsRequest(
+      ticker,
+      expirationDate,
+      expirationDatesCount,
+      filter,
+      limit,
+    );
     if (!validation.isValid) {
       return {
         status: 400,
@@ -135,7 +143,7 @@ export async function yahooFinanceOptionsHandler(
 
     const today = new Date().toISOString().split('T')[0];
     const sortedFilter = filter ? [...filter].sort((a, b) => a.localeCompare(b)).join(',') : 'all';
-    const cacheKey = `options:${today}:${ticker}:${expirationDate ?? 'all'}:${sortedFilter}:${limit ?? 'all'}`;
+    const cacheKey = `options:${today}:${ticker}:${expirationDate ?? 'all'}:${expirationDatesCount ?? 'all'}:${sortedFilter}:${limit ?? 'all'}`;
     const etag = `"${Buffer.from(cacheKey).toString('base64')}"`;
 
     if (request.headers.get('If-None-Match') === etag) {
@@ -150,7 +158,7 @@ export async function yahooFinanceOptionsHandler(
     }
 
     const data = await yahooFinanceService.getOptions(
-      { ticker, expirationDate, filter: filter as Array<'calls' | 'puts'>, limit },
+      { ticker, expirationDate, expirationDatesCount, filter: filter as Array<'calls' | 'puts'>, limit },
       context,
     );
     cacheService.set(cacheKey, data);
