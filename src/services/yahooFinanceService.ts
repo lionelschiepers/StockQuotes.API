@@ -111,9 +111,14 @@ export class YahooFinanceService {
           `Fetching historical data for ticker: ${request.ticker} from ${request.from} to ${request.to} with interval: ${interval}`,
         );
 
+        // Add one day to `to` date because Yahoo Finance API treats period2 as exclusive
+        const toDate = new Date(request.to);
+        toDate.setDate(toDate.getDate() + 1);
+        const period2 = toDate.toISOString().split('T')[0];
+
         const response = await this.yahooFinance.chart(request.ticker, {
           period1: request.from,
-          period2: request.to,
+          period2,
           interval,
         });
 

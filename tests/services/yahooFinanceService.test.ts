@@ -128,7 +128,7 @@ describe('YahooFinanceService', () => {
 
       expect(mockYahooFinance.chart).toHaveBeenCalledWith(request.ticker, {
         period1: request.from,
-        period2: request.to,
+        period2: '2024-01-11',
         interval: '1wk',
       });
 
