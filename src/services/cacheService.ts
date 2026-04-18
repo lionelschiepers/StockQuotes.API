@@ -14,6 +14,8 @@ export class CacheService {
   private readonly enabled: boolean;
   private readonly persistenceEnabled: boolean;
   private readonly cacheDir: string;
+  private readonly maxEntries: number;
+  private readonly maxDiskEntries: number;
 
   constructor() {
     this.cache = new Map();
@@ -22,6 +24,8 @@ export class CacheService {
     this.enabled = process.env.CACHE_ENABLED !== 'false';
     this.persistenceEnabled = process.env.CACHE_PERSISTENCE_ENABLED === 'true';
     this.cacheDir = process.env.CACHE_DIR ?? path.join(process.cwd(), '.cache');
+    this.maxEntries = this.parsePositiveInt(process.env.CACHE_MAX_ENTRIES, 1000);
+    this.maxDiskEntries = this.parsePositiveInt(process.env.CACHE_MAX_DISK_ENTRIES, 5000);
 
     if (this.enabled && this.persistenceEnabled) {
       this.ensureCacheDir();
@@ -32,6 +36,19 @@ export class CacheService {
       const cleanupInterval = setInterval(() => this.cleanup(), 3600000);
       cleanupInterval.unref();
     }
+  }
+
+  private parsePositiveInt(value: string | undefined, fallback: number): number {
+    if (!value) {
+      return fallback;
+    }
+
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isNaN(parsed) || parsed < 1) {
+      return fallback;
+    }
+
+    return parsed;
   }
 
   private ensureCacheDir(): void {
@@ -59,7 +76,7 @@ export class CacheService {
         const fileData = fs.readFileSync(filePath, 'utf8');
         const entry = JSON.parse(fileData) as CacheEntry<T>;
         if (entry && !this.isEntryExpired(entry)) {
-          this.cache.set(key, entry);
+          this.setInMemory(key, entry);
           return entry;
         }
         this.deleteDiskEntry(key);
@@ -101,17 +118,64 @@ export class CacheService {
       timestamp: Date.now(),
     };
 
-    // Set in memory
-    this.cache.set(key, entry);
+    this.setInMemory(key, entry);
 
     // Persist to disk if enabled
     if (this.persistenceEnabled) {
       try {
         const filePath = this.getCacheFilePath(key);
         fs.writeFileSync(filePath, JSON.stringify(entry), 'utf8');
+        this.enforceDiskLimit();
       } catch {
         // Ignore write errors
       }
+    }
+  }
+
+  private setInMemory<T>(key: string, entry: CacheEntry<T>): void {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    }
+    this.cache.set(key, entry);
+    this.enforceMemoryLimit();
+  }
+
+  private enforceMemoryLimit(): void {
+    while (this.cache.size > this.maxEntries) {
+      const oldestKey = this.cache.keys().next().value as string | undefined;
+      if (!oldestKey) {
+        break;
+      }
+      this.cache.delete(oldestKey);
+    }
+  }
+
+  private enforceDiskLimit(): void {
+    if (!this.persistenceEnabled || !fs.existsSync(this.cacheDir)) {
+      return;
+    }
+
+    try {
+      const files = fs
+        .readdirSync(this.cacheDir)
+        .filter((file) => file.endsWith('.json'))
+        .map((file) => {
+          const filePath = path.join(this.cacheDir, file);
+          const stats = fs.statSync(filePath);
+          return { filePath, mtimeMs: stats.mtimeMs };
+        })
+        .sort((a, b) => a.mtimeMs - b.mtimeMs);
+
+      const overflowCount = files.length - this.maxDiskEntries;
+      if (overflowCount <= 0) {
+        return;
+      }
+
+      for (let index = 0; index < overflowCount; index++) {
+        fs.unlinkSync(files[index].filePath);
+      }
+    } catch {
+      // Ignore disk limit enforcement errors
     }
   }
 

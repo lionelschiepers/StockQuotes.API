@@ -5,9 +5,9 @@
   "description": "",
   "private": true,
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "build:production": "npm run prestart:production && npm prune --production",
-    "watch": "tsc --w",
+    "watch": "tsc -p tsconfig.build.json --w",
     "prestart": "npm run build && func extensions install",
     "prestart:production": "npm run build",
     "start:host": "func start --cors *",

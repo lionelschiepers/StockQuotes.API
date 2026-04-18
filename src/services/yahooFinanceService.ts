@@ -29,8 +29,8 @@ export interface YahooFinanceResponse {
 export class YahooFinanceService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private readonly yahooFinance: any;
-  private static queue: Promise<void> = Promise.resolve();
   private static activeCount = 0;
+  private static waiters: Array<() => void> = [];
   private static readonly maxConcurrent = 2;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,18 +49,35 @@ export class YahooFinanceService {
   }
 
   private async enqueue<T>(task: () => Promise<T>): Promise<T> {
-    // Wait until we have a slot available (max 2 concurrent)
-    while (YahooFinanceService.activeCount >= YahooFinanceService.maxConcurrent) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-
-    YahooFinanceService.activeCount++;
+    await this.acquireSlot();
 
     try {
       const result = await task();
       return result;
     } finally {
-      YahooFinanceService.activeCount--;
+      this.releaseSlot();
+    }
+  }
+
+  private acquireSlot(): Promise<void> {
+    if (YahooFinanceService.activeCount < YahooFinanceService.maxConcurrent) {
+      YahooFinanceService.activeCount++;
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve) => {
+      YahooFinanceService.waiters.push(() => {
+        YahooFinanceService.activeCount++;
+        resolve();
+      });
+    });
+  }
+
+  private releaseSlot(): void {
+    YahooFinanceService.activeCount--;
+    const next = YahooFinanceService.waiters.shift();
+    if (next) {
+      next();
     }
   }
 
