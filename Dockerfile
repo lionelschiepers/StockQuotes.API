@@ -7,6 +7,7 @@
 #   /api/statements?ticker=MSFT&period=yearly&limitStatements=4
 #   /api/statements?ticker=MSFT&period=yearly&limitStatements=4&fields=incomeStatement.grossProfit|balanceSheet.totalAssets
 #   /api/yahoo-finance-historical?ticker=MSFT&from=2020-01-01&to=2026-02-01&interval=1wk&fields=open,close,low
+#   /api/yahoo-finance-stock-options?ticker=HOOD&filter=puts&limit=8&expirationDatesCount=2
 
 ARG ALPHAVANTAGE_API_KEY=demo
 
