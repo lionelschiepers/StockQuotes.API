@@ -30,7 +30,7 @@ export class YahooFinanceService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private readonly yahooFinance: any;
   private static activeCount = 0;
-  private static waiters: Array<() => void> = [];
+  private static readonly waiters: Array<() => void> = [];
   private static readonly maxConcurrent = 2;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
