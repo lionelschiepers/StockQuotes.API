@@ -23,9 +23,12 @@ export class ExchangeRateService {
 
       context.log(`Successfully retrieved exchange rates. Status: ${response.status}`);
 
+      const contentTypeHeader = response.headers['content-type'];
+      const contentType = typeof contentTypeHeader === 'string' ? contentTypeHeader : 'application/xml';
+
       return {
         data: response.data,
-        contentType: response.headers['content-type'] ?? 'application/xml',
+        contentType,
       };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
