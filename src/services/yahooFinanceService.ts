@@ -463,10 +463,10 @@ export class YahooFinanceService {
     }
 
     if (expirationDatesCount !== undefined) {
-      if (!Number.isInteger(expirationDatesCount) || expirationDatesCount < 1 || expirationDatesCount > 12) {
+      if (!Number.isInteger(expirationDatesCount) || expirationDatesCount < 1 || expirationDatesCount > 24) {
         return {
           isValid: false,
-          error: 'expirationDatesCount must be an integer between 1 and 12',
+          error: 'expirationDatesCount must be an integer between 1 and 24',
         };
       }
     }
