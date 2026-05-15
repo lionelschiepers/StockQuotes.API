@@ -327,14 +327,14 @@ describe('yahooFinanceOptionsHandler', () => {
   it('should return 400 for invalid expirationDatesCount value', async () => {
     mockYahooFinanceService.validateOptionsRequest.mockReturnValue({
       isValid: false,
-      error: 'expirationDatesCount must be an integer between 1 and 12',
+      error: 'expirationDatesCount must be an integer between 1 and 24',
     });
 
     const request = mockRequest({ ticker: 'AAPL', expirationDatesCount: '20' });
     const response = await yahooFinanceOptionsHandler(request, mockContext);
 
     expect(response.status).toBe(400);
-    expect(response.jsonBody).toEqual({ error: 'expirationDatesCount must be an integer between 1 and 12' });
+    expect(response.jsonBody).toEqual({ error: 'expirationDatesCount must be an integer between 1 and 24' });
   });
 
   it('should return 400 if both expirationDate and expirationDatesCount are provided', async () => {
