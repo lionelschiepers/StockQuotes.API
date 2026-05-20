@@ -13,7 +13,7 @@ export interface ServiceContainer {
 
 const container: ServiceContainer = {
   yahooFinanceService: new YahooFinanceService(),
-  exchangeRateService: new ExchangeRateService(),
+  exchangeRateService: new ExchangeRateService(cacheService),
   alphaVantageService: new AlphaVantageService(cacheService),
   cacheService: cacheService,
 };

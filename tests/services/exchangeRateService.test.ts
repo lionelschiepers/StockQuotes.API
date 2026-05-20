@@ -2,6 +2,8 @@ import axios from 'axios';
 import type { InvocationContext } from '@azure/functions';
 import { ExchangeRateService } from '../../src/services/exchangeRateService';
 
+import type { CacheService } from '../../src/services/cacheService';
+
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
@@ -12,10 +14,15 @@ const mockContext = {
 
 describe('ExchangeRateService', () => {
   let service: ExchangeRateService;
+  let mockCache: { get: jest.Mock; set: jest.Mock };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new ExchangeRateService();
+    mockCache = {
+      get: jest.fn(),
+      set: jest.fn(),
+    };
+    service = new ExchangeRateService(mockCache as unknown as CacheService);
   });
 
   describe('getDailyRates', () => {
@@ -63,11 +70,48 @@ describe('ExchangeRateService', () => {
     });
 
     it('should throw an error if fetching rates fails', async () => {
+      mockCache.get.mockReturnValue(null);
       const error = new Error('Network Error');
       mockedAxios.get.mockRejectedValue(error);
 
       await expect(service.getDailyRates(mockContext)).rejects.toThrow('Network Error');
       expect(mockContext.error).toHaveBeenCalledWith(`Error fetching exchange rates from ECB: ${error.message}`, error);
+    });
+
+    it('should return cached rates if present in cache and not fetch from ECB', async () => {
+      const mockCachedData = {
+        data: '<cached>xml</cached>',
+        contentType: 'text/xml',
+      };
+      mockCache.get.mockReturnValue(mockCachedData);
+
+      const result = await service.getDailyRates(mockContext);
+
+      expect(mockCache.get).toHaveBeenCalledWith('ecb-daily-rates');
+      expect(mockedAxios.get).not.toHaveBeenCalled();
+      expect(result).toEqual(mockCachedData);
+      expect(mockContext.log).toHaveBeenCalledWith('Successfully retrieved ECB exchange rates from cache');
+    });
+
+    it('should fetch daily rates from ECB on cache miss and save to cache', async () => {
+      mockCache.get.mockReturnValue(null);
+
+      const mockXmlResponse = '<fresh>xml</fresh>';
+      mockedAxios.get.mockResolvedValue({
+        data: mockXmlResponse,
+        status: 200,
+        headers: { 'content-type': 'application/xml' },
+      });
+
+      const result = await service.getDailyRates(mockContext);
+
+      expect(mockCache.get).toHaveBeenCalledWith('ecb-daily-rates');
+      expect(mockedAxios.get).toHaveBeenCalled();
+      expect(mockCache.set).toHaveBeenCalledWith('ecb-daily-rates', {
+        data: mockXmlResponse,
+        contentType: 'application/xml',
+      });
+      expect(result.data).toBe(mockXmlResponse);
     });
   });
 

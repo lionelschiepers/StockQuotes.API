@@ -3,6 +3,8 @@ import { app } from '@azure/functions';
 import { getServiceContainer } from '../di/container';
 import { strictRateLimiter } from '../services/rateLimiter';
 
+import { cacheService } from '../services/cacheService';
+
 const { yahooFinanceService } = getServiceContainer();
 
 // sample call: http://localhost:7071/api/yahoo-finance?symbols=MSFT&fields=regularMarketPrice
@@ -64,20 +66,60 @@ export async function yahooFinanceHandler(request: HttpRequest, context: Invocat
       };
     }
 
+    // Build cache key and etag
+    const sortedSymbols = [...querySymbols].sort((a, b) => a.localeCompare(b)).join(',');
+    const sortedFields = queryFields ? [...queryFields].sort((a, b) => a.localeCompare(b)).join(',') : 'all';
+    const cacheKey = `quotes:${sortedSymbols}:${sortedFields}`;
+    const etag = `"${Buffer.from(cacheKey).toString('base64')}"`;
+
+    const commonHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      ETag: etag,
+      'X-RateLimit-Limit': strictRateLimiter.getMaxRequests().toString(),
+      'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
+      'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
+    };
+
+    // Check ETag
+    if (request.headers.get('If-None-Match') === etag) {
+      context.log(`ETag match for ${cacheKey}, returning 304`);
+      return {
+        status: 304,
+        headers: commonHeaders,
+      };
+    }
+
+    // Check Server Cache (60 seconds short timer)
+    const cached = cacheService.get<unknown>(cacheKey);
+    if (cached) {
+      context.log(`Cache hit for ${cacheKey}`);
+      return {
+        jsonBody: cached,
+        headers: {
+          ...commonHeaders,
+          'Cache-Control': 'max-age=60',
+          'Content-Type': 'application/json',
+          'X-Cache': 'HIT',
+        },
+      };
+    }
+
     const responseMessage = await yahooFinanceService.getQuotes(
       { symbols: querySymbols, fields: queryFields },
       context,
     );
 
+    // Save in cache with a short TTL (60 seconds)
+    cacheService.set(cacheKey, responseMessage, 60 * 1000);
+    context.log(`Cache stored for ${cacheKey}`);
+
     return {
       jsonBody: responseMessage,
       headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'max-age=120',
+        ...commonHeaders,
+        'Cache-Control': 'max-age=60',
         'Content-Type': 'application/json',
-        'X-RateLimit-Limit': strictRateLimiter.getMaxRequests().toString(),
-        'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-        'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
+        'X-Cache': 'MISS',
       },
     };
   } catch (error: unknown) {

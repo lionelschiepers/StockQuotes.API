@@ -1,7 +1,9 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import { app } from '@azure/functions';
-import { exchangeRateService } from '../services/exchangeRateService';
+import { getServiceContainer } from '../di/container';
 import { apiRateLimiter } from '../services/rateLimiter';
+
+const { exchangeRateService } = getServiceContainer();
 
 export async function exchangeRateEcbHandler(
   request: HttpRequest,

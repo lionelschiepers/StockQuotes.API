@@ -5,6 +5,7 @@ import * as path from 'node:path';
 interface CacheEntry<T> {
   data: T;
   timestamp: number;
+  expiry?: number;
 }
 
 export class CacheService {
@@ -88,6 +89,9 @@ export class CacheService {
   }
 
   private isEntryExpired(entry: CacheEntry<unknown>): boolean {
+    if (entry.expiry !== undefined) {
+      return Date.now() > entry.expiry;
+    }
     return Date.now() > entry.timestamp + this.ttlMs;
   }
 
@@ -108,7 +112,7 @@ export class CacheService {
     return entry.data as T;
   }
 
-  set<T>(key: string, data: T): void {
+  set<T>(key: string, data: T, customTtlMs?: number): void {
     if (!this.enabled) {
       return;
     }
@@ -117,6 +121,10 @@ export class CacheService {
       data,
       timestamp: Date.now(),
     };
+
+    if (customTtlMs !== undefined) {
+      entry.expiry = Date.now() + customTtlMs;
+    }
 
     this.setInMemory(key, entry);
 

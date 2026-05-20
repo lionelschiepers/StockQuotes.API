@@ -1,13 +1,16 @@
 import type { HttpRequest, InvocationContext } from '@azure/functions';
 import { getServiceContainer } from '../../src/di/container';
 import { strictRateLimiter } from '../../src/services/rateLimiter';
+import { cacheService } from '../../src/services/cacheService';
 
 // Mock the dependencies
 jest.mock('../../src/di/container');
 jest.mock('../../src/services/rateLimiter');
+jest.mock('../../src/services/cacheService');
 
 const mockGetServiceContainer = getServiceContainer as jest.Mock;
 const mockStrictRateLimiter = strictRateLimiter as unknown as { isAllowed: jest.Mock; getMaxRequests: jest.Mock };
+const mockCacheService = cacheService as jest.Mocked<typeof cacheService>;
 
 const mockYahooFinanceService = {
   getQuotes: jest.fn(),
@@ -48,6 +51,8 @@ describe('yahooFinanceHandler', () => {
       remaining: 1,
       resetTime: Date.now() + 1000,
     });
+
+    mockCacheService.get.mockReturnValue(null);
   });
 
   it('should return quotes for valid parameters including fields', async () => {
@@ -124,5 +129,56 @@ describe('yahooFinanceHandler', () => {
 
     expect(response.status).toBe(500);
     expect(response.jsonBody).toMatchObject({ error: 'Internal server error' });
+  });
+
+  it('should return cache hit response when data is cached', async () => {
+    const cachedData = { AAPL: { regularMarketPrice: 150 } };
+    mockYahooFinanceService.validateQuoteRequest.mockReturnValue({ isValid: true });
+    mockCacheService.get.mockReturnValue(cachedData);
+
+    const request = mockRequest({ symbols: 'AAPL' });
+    const response = await yahooFinanceHandler(request, mockContext);
+
+    expect(response.jsonBody).toEqual(cachedData);
+    expect(response.headers).toMatchObject({
+      'X-Cache': 'HIT',
+      'Cache-Control': 'max-age=60',
+    });
+    expect(mockYahooFinanceService.getQuotes).not.toHaveBeenCalled();
+  });
+
+  it('should perform upstream fetch on cache miss and save to cache with 60s TTL', async () => {
+    const freshData = { AAPL: { regularMarketPrice: 151 } };
+    mockYahooFinanceService.validateQuoteRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getQuotes.mockResolvedValue(freshData);
+    mockCacheService.get.mockReturnValue(null);
+
+    const request = mockRequest({ symbols: 'AAPL' });
+    const response = await yahooFinanceHandler(request, mockContext);
+
+    expect(response.jsonBody).toEqual(freshData);
+    expect(response.headers).toMatchObject({
+      'X-Cache': 'MISS',
+      'Cache-Control': 'max-age=60',
+    });
+    expect(mockYahooFinanceService.getQuotes).toHaveBeenCalled();
+    expect(mockCacheService.set).toHaveBeenCalledWith('quotes:AAPL:all', freshData, 60000);
+  });
+
+  it('should return 304 Not Modified when ETag matches If-None-Match', async () => {
+    mockYahooFinanceService.validateQuoteRequest.mockReturnValue({ isValid: true });
+
+    const expectedKey = 'quotes:AAPL:all';
+    const etag = `"${Buffer.from(expectedKey).toString('base64')}"`;
+
+    const request = mockRequest({ symbols: 'AAPL' }, { 'If-None-Match': etag });
+    const response = await yahooFinanceHandler(request, mockContext);
+
+    expect(response.status).toBe(304);
+    expect(response.headers).toMatchObject({
+      ETag: etag,
+    });
+    expect(mockYahooFinanceService.getQuotes).not.toHaveBeenCalled();
+    expect(mockCacheService.get).not.toHaveBeenCalled();
   });
 });
