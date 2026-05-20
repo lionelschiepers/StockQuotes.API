@@ -131,6 +131,18 @@ describe('yahooFinanceHandler', () => {
     expect(response.jsonBody).toMatchObject({ error: 'Internal server error' });
   });
 
+  it('should return 429 when Yahoo Finance returns Too Many Requests', async () => {
+    mockYahooFinanceService.validateQuoteRequest.mockReturnValue({ isValid: true });
+    const tooManyRequestsError = Object.assign(new Error('Too Many Requests'), { code: 429 });
+    mockYahooFinanceService.getQuotes.mockRejectedValue(tooManyRequestsError);
+
+    const request = mockRequest({ symbols: 'AAPL' });
+    const response = await yahooFinanceHandler(request, mockContext);
+
+    expect(response.status).toBe(429);
+    expect(response.jsonBody).toMatchObject({ error: 'Too Many Requests' });
+  });
+
   it('should return cache hit response when data is cached', async () => {
     const cachedData = { AAPL: { regularMarketPrice: 150 } };
     mockYahooFinanceService.validateQuoteRequest.mockReturnValue({ isValid: true });

@@ -50,6 +50,12 @@ function handleHistoricalError(error: unknown, context: InvocationContext): Http
         jsonBody: { error: 'Request timeout', message: 'External service is not responding' },
       };
     }
+    if (errObj.code === 429) {
+      return {
+        status: 429,
+        jsonBody: { error: 'Too Many Requests', message: 'Yahoo Finance rate limit exceeded. Please try again later.' },
+      };
+    }
   }
 
   return {

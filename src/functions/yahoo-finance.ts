@@ -138,12 +138,21 @@ export async function yahooFinanceHandler(request: HttpRequest, context: Invocat
         },
       };
     } else if (error && typeof error === 'object' && 'code' in error) {
-      const nodeError = error as { code?: string };
+      const nodeError = error as { code?: string | number };
       if (nodeError.code === 'ECONNABORTED' || nodeError.code === 'ETIMEDOUT') {
         // Timeout error
         return {
           status: 408,
           jsonBody: { error: 'Request timeout', message: 'External service is not responding' },
+        };
+      }
+      if (nodeError.code === 429) {
+        return {
+          status: 429,
+          jsonBody: {
+            error: 'Too Many Requests',
+            message: 'Yahoo Finance rate limit exceeded. Please try again later.',
+          },
         };
       }
     }

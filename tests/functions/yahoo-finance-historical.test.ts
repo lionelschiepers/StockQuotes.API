@@ -175,6 +175,18 @@ describe('yahooFinanceHistoricalHandler', () => {
     expect(response.jsonBody).toMatchObject({ error: 'Internal server error' });
   });
 
+  it('should return 429 when Yahoo Finance returns Too Many Requests', async () => {
+    mockYahooFinanceService.validateHistoricalRequest.mockReturnValue({ isValid: true });
+    const tooManyRequestsError = Object.assign(new Error('Too Many Requests'), { code: 429 });
+    mockYahooFinanceService.getHistoricalData.mockRejectedValue(tooManyRequestsError);
+
+    const request = mockRequest({ ticker: 'AAPL', from: '2024-01-01', to: '2024-01-02' });
+    const response = await yahooFinanceHistoricalHandler(request, mockContext);
+
+    expect(response.status).toBe(429);
+    expect(response.jsonBody).toMatchObject({ error: 'Too Many Requests' });
+  });
+
   it('should return ETag header in response', async () => {
     const expectedData = { quotes: [{ date: '2024-01-01', close: 100 }] };
     mockYahooFinanceService.validateHistoricalRequest.mockReturnValue({ isValid: true });

@@ -443,6 +443,18 @@ describe('yahooFinanceOptionsHandler', () => {
     expect(response.jsonBody).toMatchObject({ error: 'Request timeout' });
   });
 
+  it('should return 429 when Yahoo Finance returns Too Many Requests', async () => {
+    const tooManyRequestsError = Object.assign(new Error('Too Many Requests'), { code: 429 });
+    mockYahooFinanceService.validateOptionsRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getOptions.mockRejectedValue(tooManyRequestsError);
+
+    const request = mockRequest({ ticker: 'AAPL' });
+    const response = await yahooFinanceOptionsHandler(request, mockContext);
+
+    expect(response.status).toBe(429);
+    expect(response.jsonBody).toMatchObject({ error: 'Too Many Requests' });
+  });
+
   it('should handle generic errors', async () => {
     mockYahooFinanceService.validateOptionsRequest.mockReturnValue({ isValid: true });
     mockYahooFinanceService.getOptions.mockRejectedValue(new Error('Unknown error'));

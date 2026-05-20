@@ -57,6 +57,13 @@ function handleOptionsError(error: unknown, context: InvocationContext): HttpRes
         headers: corsHeaders,
       };
     }
+    if (errObj.code === 429) {
+      return {
+        status: 429,
+        jsonBody: { error: 'Too Many Requests', message: 'Yahoo Finance rate limit exceeded. Please try again later.' },
+        headers: corsHeaders,
+      };
+    }
   }
 
   return {
