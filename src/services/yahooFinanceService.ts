@@ -421,14 +421,16 @@ export class YahooFinanceService {
 
         if (opt.calls && opt.calls.length > 0) {
           const validCalls = opt.calls.filter(
-            (call: any) => typeof call.strike === 'number' && call.strike > marketPrice,
+            (call: { strike: number }) => typeof call.strike === 'number' && call.strike > marketPrice,
           );
           validCalls.sort((a: { strike: number }, b: { strike: number }) => a.strike - b.strike);
           limitedOpt.calls = validCalls.slice(0, limit);
         }
 
         if (opt.puts && opt.puts.length > 0) {
-          const validPuts = opt.puts.filter((put: any) => typeof put.strike === 'number' && put.strike < marketPrice);
+          const validPuts = opt.puts.filter(
+            (put: { strike: number }) => typeof put.strike === 'number' && put.strike < marketPrice,
+          );
           validPuts.sort((a: { strike: number }, b: { strike: number }) => b.strike - a.strike);
           limitedOpt.puts = validPuts.slice(0, limit);
         }
