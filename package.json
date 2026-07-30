@@ -14,6 +14,7 @@
     "start:host": "func start --cors *",
     "start": "npm-run-all --parallel start:host watch",
     "test": "jest",
+    "test:coverage": "jest --coverage",
     "clean": "rimraf dist",
     "lint": "eslint \"{src,tests}/**/*.ts\"",
     "format": "prettier --write \"{src,tests}/**/*.ts\"",
