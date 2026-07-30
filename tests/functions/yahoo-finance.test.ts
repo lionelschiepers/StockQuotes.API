@@ -143,6 +143,30 @@ describe('yahooFinanceHandler', () => {
     expect(response.jsonBody).toMatchObject({ error: 'Too Many Requests' });
   });
 
+  it('should return the upstream status when the error has an axios-style response', async () => {
+    mockYahooFinanceService.validateQuoteRequest.mockReturnValue({ isValid: true });
+    const axiosError = { response: { status: 503, statusText: 'Service Unavailable' } };
+    mockYahooFinanceService.getQuotes.mockRejectedValue(axiosError);
+
+    const request = mockRequest({ symbols: 'AAPL' });
+    const response = await yahooFinanceHandler(request, mockContext);
+
+    expect(response.status).toBe(503);
+    expect(response.jsonBody).toMatchObject({ error: 'External API error', message: 'Service Unavailable' });
+  });
+
+  it('should return 408 when the error is a timeout', async () => {
+    mockYahooFinanceService.validateQuoteRequest.mockReturnValue({ isValid: true });
+    const timeoutError = Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' });
+    mockYahooFinanceService.getQuotes.mockRejectedValue(timeoutError);
+
+    const request = mockRequest({ symbols: 'AAPL' });
+    const response = await yahooFinanceHandler(request, mockContext);
+
+    expect(response.status).toBe(408);
+    expect(response.jsonBody).toMatchObject({ error: 'Request timeout' });
+  });
+
   it('should return cache hit response when data is cached', async () => {
     const cachedData = { AAPL: { regularMarketPrice: 150 } };
     mockYahooFinanceService.validateQuoteRequest.mockReturnValue({ isValid: true });

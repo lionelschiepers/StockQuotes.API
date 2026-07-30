@@ -388,4 +388,86 @@ describe('YahooFinanceService', () => {
       expect(result.error).toBe('Date range exceeds maximum of 50 years for monthly interval');
     });
   });
+
+  describe('validateOptionsRequest', () => {
+    it('should return isValid: true for valid input', () => {
+      const result = service.validateOptionsRequest('AAPL', undefined, undefined, undefined, undefined);
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should return isValid: false if ticker is missing', () => {
+      const result = service.validateOptionsRequest('');
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Ticker must be provided');
+    });
+
+    it('should return isValid: false if ticker is blank', () => {
+      const result = service.validateOptionsRequest('   ');
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Ticker must be provided');
+    });
+
+    it('should return isValid: false if expirationDate has an invalid format', () => {
+      const result = service.validateOptionsRequest('AAPL', '01-01-2024');
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Expiration date must be in yyyy-MM-dd format');
+    });
+
+    it('should return isValid: false if expirationDate is not a real date', () => {
+      const result = service.validateOptionsRequest('AAPL', '2024-13-45');
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Invalid expiration date');
+    });
+
+    it('should return isValid: true for a valid expirationDate', () => {
+      const result = service.validateOptionsRequest('AAPL', '2024-01-01');
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should return isValid: false if expirationDatesCount is not an integer', () => {
+      const result = service.validateOptionsRequest('AAPL', undefined, 1.5);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('expirationDatesCount must be an integer between 1 and 24');
+    });
+
+    it('should return isValid: false if expirationDatesCount is out of range', () => {
+      const result = service.validateOptionsRequest('AAPL', undefined, 25);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('expirationDatesCount must be an integer between 1 and 24');
+    });
+
+    it('should return isValid: false if both expirationDate and expirationDatesCount are provided', () => {
+      const result = service.validateOptionsRequest('AAPL', '2024-01-01', 2);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Cannot specify both expirationDate and expirationDatesCount');
+    });
+
+    it('should return isValid: false for invalid filter values', () => {
+      const result = service.validateOptionsRequest('AAPL', undefined, undefined, ['invalid']);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Invalid filter values: invalid. Valid values are: calls, puts');
+    });
+
+    it('should return isValid: true for valid filter values', () => {
+      const result = service.validateOptionsRequest('AAPL', undefined, undefined, ['calls', 'puts']);
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should return isValid: false if limit is not an integer', () => {
+      const result = service.validateOptionsRequest('AAPL', undefined, undefined, undefined, 1.5);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Limit must be an integer between 1 and 50');
+    });
+
+    it('should return isValid: false if limit is out of range', () => {
+      const result = service.validateOptionsRequest('AAPL', undefined, undefined, undefined, 51);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Limit must be an integer between 1 and 50');
+    });
+
+    it('should return isValid: true for a valid limit', () => {
+      const result = service.validateOptionsRequest('AAPL', undefined, undefined, undefined, 10);
+      expect(result.isValid).toBe(true);
+    });
+  });
 });
