@@ -1,0 +1,5 @@
+allowBuilds:
+  azure-functions-core-tools: true
+  unrs-resolver: true
+minimumReleaseAgeExclude:
+  - axios@1.19.0
