@@ -30,6 +30,7 @@ This API serves as a dedicated backend for the [StockQuotes.React](https://githu
 ### Prerequisites
 
 *   [Node.js](https://nodejs.org/)
+*   [pnpm](https://pnpm.io/)
 *   [Azure Functions Core Tools](https://github.com/Azure/azure-functions-core-tools)
 
 ### Installation
@@ -44,18 +45,18 @@ This API serves as a dedicated backend for the [StockQuotes.React](https://githu
     ```
 3.  Install the dependencies:
     ```bash
-    npm install
+    pnpm install
     ```
 
 ### Running Locally
 
 1.  Build the project:
     ```bash
-    npm run build
+    pnpm run build
     ```
 2.  Start the Azure Functions host:
     ```bash
-    npm start
+    pnpm start
     ```
 
 The API will then be available at the following endpoints:
@@ -69,11 +70,11 @@ This project uses [Jest](https://jestjs.io/) for both unit and integration tests
 
 *   Run all tests:
     ```bash
-    npm test
+    pnpm test
     ```
 *   Run tests in watch mode:
     ```bash
-    npm test -- --watch
+    pnpm test -- --watch
     ```
 
 ## 💻 Development
@@ -84,8 +85,8 @@ We follow a set of development conventions to ensure a high-quality codebase.
 *   **Service-Oriented Architecture:** Business logic is encapsulated in services.
 *   **Dependency Injection:** We use a simple DI container to manage service instances.
 *   **Linting and Formatting:** We use ESLint and Prettier to maintain a consistent code style.
-    *   `npm run lint`
-    *   `npm run format`
+    *   `pnpm run lint`
+    *   `pnpm run format`
 
 ## 🙌 Contributing
 

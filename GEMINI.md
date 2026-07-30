@@ -13,7 +13,7 @@ The application is designed to be scalable and resilient, incorporating features
 
 ### Prerequisites
 
-*   Node.js
+*   Node.js and pnpm
 *   Azure Functions Core Tools
 
 ### Installation
@@ -22,7 +22,7 @@ The application is designed to be scalable and resilient, incorporating features
 2.  Install the dependencies:
 
     ```bash
-    npm install
+    pnpm install
     ```
 
 ### Running Locally
@@ -30,13 +30,13 @@ The application is designed to be scalable and resilient, incorporating features
 1.  Build the project:
 
     ```bash
-    npm run build
+    pnpm run build
     ```
 
 2.  Start the Azure Functions host:
 
     ```bash
-    npm start
+    pnpm start
     ```
 
 The functions will be available at the following endpoints:
@@ -51,13 +51,13 @@ This project uses [Jest](https://jestjs.io/) for unit and integration testing. T
 To run the tests, use the following command:
 
 ```bash
-npm test
+pnpm test
 ```
 
 You can also run the tests in watch mode:
 
 ```bash
-npm test -- --watch
+pnpm test -- --watch
 ```
 
 ## Development Conventions
@@ -67,14 +67,14 @@ npm test -- --watch
 *   **Dependency Injection:** A simple dependency injection container is used to manage service instances.
 *   **Rate Limiting:** A custom in-memory rate limiter is used to protect the API from excessive requests.
 *   **Linting and Formatting:** The project is set up with ESLint and Prettier to ensure code consistency. You can run the linter and formatter with the following commands:
-    *   `npm run lint`
-    *   `npm run format`
+    *   `pnpm run lint`
+    *   `pnpm run format`
 
 # Rules
 - The project is scanned with sonarqube
 - The application is developped on windows os
-- Validate every fix with npm run lint
-- Validate every fix with npm run format
-- Validate every fix with npm run build
-- Validate every fix with npm test
+- Validate every fix with pnpm run lint
+- Validate every fix with pnpm run format
+- Validate every fix with pnpm run build
+- Validate every fix with pnpm test
 - Don't automatically update GIT

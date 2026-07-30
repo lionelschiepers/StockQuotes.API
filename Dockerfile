@@ -14,16 +14,16 @@ ARG ALPHAVANTAGE_API_KEY=demo
 # Build stage
 FROM mcr.microsoft.com/azure-functions/node:4-node24 AS builder
 
-RUN npm install -g npm@latest
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /home/site/wwwroot
 
-COPY package*.json ./
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 
 COPY . .
-RUN npm run build && \
-    npm prune --omit=dev
+RUN pnpm run build && \
+    pnpm prune --prod
 
 # Production stage
 FROM mcr.microsoft.com/azure-functions/node:4-node24
@@ -42,7 +42,6 @@ ENV CACHE_PERSISTENCE_ENABLED=true
      apt-get upgrade -y && \
      apt-get install -y --no-install-recommends curl ca-certificates && \
      rm -rf /var/lib/apt/lists/* && \
-     npm r -g npm && \
      useradd -m appuser && \
      mkdir -p /home/site/wwwroot && \
      chown appuser:appuser /home/site/wwwroot
