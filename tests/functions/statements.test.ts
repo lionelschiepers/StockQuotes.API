@@ -395,46 +395,15 @@ describe('statementsHandler', () => {
   });
 
   describe('limitStatements parameter', () => {
-    it('should return 400 for invalid limitStatements (negative)', async () => {
+    it.each([
+      ['negative', '-1'],
+      ['zero', '0'],
+      ['too large', '101'],
+      ['non-numeric', 'abc'],
+    ])('should return 400 for invalid limitStatements (%s)', async (_description, limitStatements) => {
       mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
 
-      const request = mockRequest({ ticker: 'IBM', limitStatements: '-1' });
-      const response = await statementsHandler(request, mockContext);
-
-      expect(response.status).toBe(400);
-      expect(response.jsonBody).toMatchObject({
-        error: 'Invalid parameter: limitStatements',
-      });
-    });
-
-    it('should return 400 for invalid limitStatements (zero)', async () => {
-      mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
-
-      const request = mockRequest({ ticker: 'IBM', limitStatements: '0' });
-      const response = await statementsHandler(request, mockContext);
-
-      expect(response.status).toBe(400);
-      expect(response.jsonBody).toMatchObject({
-        error: 'Invalid parameter: limitStatements',
-      });
-    });
-
-    it('should return 400 for invalid limitStatements (too large)', async () => {
-      mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
-
-      const request = mockRequest({ ticker: 'IBM', limitStatements: '101' });
-      const response = await statementsHandler(request, mockContext);
-
-      expect(response.status).toBe(400);
-      expect(response.jsonBody).toMatchObject({
-        error: 'Invalid parameter: limitStatements',
-      });
-    });
-
-    it('should return 400 for invalid limitStatements (non-numeric)', async () => {
-      mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
-
-      const request = mockRequest({ ticker: 'IBM', limitStatements: 'abc' });
+      const request = mockRequest({ ticker: 'IBM', limitStatements });
       const response = await statementsHandler(request, mockContext);
 
       expect(response.status).toBe(400);

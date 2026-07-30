@@ -442,6 +442,68 @@ export class YahooFinanceService {
     return response;
   }
 
+  private validateOptionsTicker(ticker: string): string | undefined {
+    if (!ticker || ticker.trim().length === 0) {
+      return 'Ticker must be provided';
+    }
+    return undefined;
+  }
+
+  private validateOptionsExpirationDate(expirationDate?: string): string | undefined {
+    if (!expirationDate) {
+      return undefined;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(expirationDate)) {
+      return 'Expiration date must be in yyyy-MM-dd format';
+    }
+    if (Number.isNaN(new Date(expirationDate).getTime())) {
+      return 'Invalid expiration date';
+    }
+    return undefined;
+  }
+
+  private validateOptionsExpirationDatesCount(expirationDatesCount?: number): string | undefined {
+    if (expirationDatesCount === undefined) {
+      return undefined;
+    }
+    if (!Number.isInteger(expirationDatesCount) || expirationDatesCount < 1 || expirationDatesCount > 24) {
+      return 'expirationDatesCount must be an integer between 1 and 24';
+    }
+    return undefined;
+  }
+
+  private validateOptionsExpirationConflict(
+    expirationDate?: string,
+    expirationDatesCount?: number,
+  ): string | undefined {
+    if (expirationDate && expirationDatesCount) {
+      return 'Cannot specify both expirationDate and expirationDatesCount';
+    }
+    return undefined;
+  }
+
+  private validateOptionsFilter(filter?: string[]): string | undefined {
+    if (!filter || filter.length === 0) {
+      return undefined;
+    }
+    const validFilters = new Set(['calls', 'puts']);
+    const invalidFilters = filter.filter((f) => !validFilters.has(f));
+    if (invalidFilters.length > 0) {
+      return `Invalid filter values: ${invalidFilters.join(', ')}. Valid values are: calls, puts`;
+    }
+    return undefined;
+  }
+
+  private validateOptionsLimit(limit?: number): string | undefined {
+    if (limit === undefined) {
+      return undefined;
+    }
+    if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+      return 'Limit must be an integer between 1 and 50';
+    }
+    return undefined;
+  }
+
   validateOptionsRequest(
     ticker: string,
     expirationDate?: string,
@@ -449,57 +511,14 @@ export class YahooFinanceService {
     filter?: string[],
     limit?: number,
   ): { isValid: boolean; error?: string } {
-    if (!ticker || ticker.trim().length === 0) {
-      return { isValid: false, error: 'Ticker must be provided' };
-    }
+    const error =
+      this.validateOptionsTicker(ticker) ??
+      this.validateOptionsExpirationDate(expirationDate) ??
+      this.validateOptionsExpirationDatesCount(expirationDatesCount) ??
+      this.validateOptionsExpirationConflict(expirationDate, expirationDatesCount) ??
+      this.validateOptionsFilter(filter) ??
+      this.validateOptionsLimit(limit);
 
-    if (expirationDate && !/^\d{4}-\d{2}-\d{2}$/.test(expirationDate)) {
-      return { isValid: false, error: 'Expiration date must be in yyyy-MM-dd format' };
-    }
-
-    if (expirationDate) {
-      const date = new Date(expirationDate);
-      if (Number.isNaN(date.getTime())) {
-        return { isValid: false, error: 'Invalid expiration date' };
-      }
-    }
-
-    if (expirationDatesCount !== undefined) {
-      if (!Number.isInteger(expirationDatesCount) || expirationDatesCount < 1 || expirationDatesCount > 24) {
-        return {
-          isValid: false,
-          error: 'expirationDatesCount must be an integer between 1 and 24',
-        };
-      }
-    }
-
-    if (expirationDate && expirationDatesCount) {
-      return {
-        isValid: false,
-        error: 'Cannot specify both expirationDate and expirationDatesCount',
-      };
-    }
-
-    if (filter && filter.length > 0) {
-      const validFilters = ['calls', 'puts'];
-      const invalidFilters = filter.filter((f) => !validFilters.includes(f));
-      if (invalidFilters.length > 0) {
-        return {
-          isValid: false,
-          error: `Invalid filter values: ${invalidFilters.join(', ')}. Valid values are: calls, puts`,
-        };
-      }
-    }
-
-    if (limit !== undefined) {
-      if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
-        return {
-          isValid: false,
-          error: 'Limit must be an integer between 1 and 50',
-        };
-      }
-    }
-
-    return { isValid: true };
+    return error ? { isValid: false, error } : { isValid: true };
   }
 }

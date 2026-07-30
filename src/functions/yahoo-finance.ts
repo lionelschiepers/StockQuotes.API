@@ -7,6 +7,51 @@ import { cacheService } from '../services/cacheService';
 
 const { yahooFinanceService } = getServiceContainer();
 
+function mapYahooFinanceError(error: unknown): HttpResponseInit {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const axiosError = error as { response?: { status?: number; statusText?: string } };
+    // External API error
+    return {
+      status: axiosError.response?.status ?? 502,
+      jsonBody: {
+        error: 'External API error',
+        message: axiosError.response?.statusText ?? 'Unknown error',
+        status: axiosError.response?.status,
+      },
+    };
+  }
+
+  if (error && typeof error === 'object' && 'code' in error) {
+    const nodeError = error as { code?: string | number };
+    if (nodeError.code === 'ECONNABORTED' || nodeError.code === 'ETIMEDOUT') {
+      // Timeout error
+      return {
+        status: 408,
+        jsonBody: { error: 'Request timeout', message: 'External service is not responding' },
+      };
+    }
+    if (nodeError.code === 429) {
+      return {
+        status: 429,
+        jsonBody: {
+          error: 'Too Many Requests',
+          message: 'Yahoo Finance rate limit exceeded. Please try again later.',
+        },
+      };
+    }
+  }
+
+  const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+  // Internal server error
+  return {
+    status: 500,
+    jsonBody: {
+      error: 'Internal server error',
+      message: errorMessage,
+    },
+  };
+}
+
 // sample call: http://localhost:7071/api/yahoo-finance?symbols=MSFT&fields=regularMarketPrice
 export async function yahooFinanceHandler(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   context.log('HTTP trigger YahooFinance launched');
@@ -124,48 +169,7 @@ export async function yahooFinanceHandler(request: HttpRequest, context: Invocat
     };
   } catch (error: unknown) {
     context.error('Error in yahooFinanceHandler:', error);
-
-    // Handle different error types
-    if (error && typeof error === 'object' && 'response' in error) {
-      const axiosError = error as { response?: { status?: number; statusText?: string } };
-      // External API error
-      return {
-        status: axiosError.response?.status ?? 502,
-        jsonBody: {
-          error: 'External API error',
-          message: axiosError.response?.statusText ?? 'Unknown error',
-          status: axiosError.response?.status,
-        },
-      };
-    } else if (error && typeof error === 'object' && 'code' in error) {
-      const nodeError = error as { code?: string | number };
-      if (nodeError.code === 'ECONNABORTED' || nodeError.code === 'ETIMEDOUT') {
-        // Timeout error
-        return {
-          status: 408,
-          jsonBody: { error: 'Request timeout', message: 'External service is not responding' },
-        };
-      }
-      if (nodeError.code === 429) {
-        return {
-          status: 429,
-          jsonBody: {
-            error: 'Too Many Requests',
-            message: 'Yahoo Finance rate limit exceeded. Please try again later.',
-          },
-        };
-      }
-    }
-
-    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-    // Internal server error
-    return {
-      status: 500,
-      jsonBody: {
-        error: 'Internal server error',
-        message: errorMessage,
-      },
-    };
+    return mapYahooFinanceError(error);
   }
 }
 
