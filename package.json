@@ -18,7 +18,7 @@
     "clean": "rimraf dist",
     "lint": "eslint \"{src,tests}/**/*.ts\"",
     "format": "prettier --write \"{src,tests}/**/*.ts\"",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "lint-staged": {
     "{src,tests}/**/*.ts": [
