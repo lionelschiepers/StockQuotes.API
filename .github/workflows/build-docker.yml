@@ -14,17 +14,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Install Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Install dependencies
         run: pnpm install --ignore-scripts
@@ -36,12 +36,12 @@ jobs:
         run: pnpm run test:coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v7
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
         if: github.ref == 'refs/heads/main'
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -53,17 +53,17 @@ jobs:
       security-events: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         if: github.ref == 'refs/heads/main'
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         if: github.ref == 'refs/heads/main'
         with:
           context: .
@@ -71,14 +71,14 @@ jobs:
           push: true
 
       - name: Docker Scout Quickview
-        uses: docker/scout-action@v1
+        uses: docker/scout-action@7c6b6c3f7844478ace1ffd4e7aef649053d1f87d # v1.24.0
         if: github.ref == 'refs/heads/main'
         with:
           command: quickview
           image: lionelschiepers/stockquote-node-api:github-latest
 
       - name: Docker Scout CVEs with SARIF output
-        uses: docker/scout-action@v1
+        uses: docker/scout-action@7c6b6c3f7844478ace1ffd4e7aef649053d1f87d # v1.24.0
         if: github.ref == 'refs/heads/main'
         with:
           command: cves
@@ -89,7 +89,7 @@ jobs:
           only-severities: 'critical,high,medium'
 
       - name: Docker Scout SBOM
-        uses: docker/scout-action@v1
+        uses: docker/scout-action@7c6b6c3f7844478ace1ffd4e7aef649053d1f87d # v1.24.0
         if: github.ref == 'refs/heads/main'
         with:
           command: sbom
@@ -97,14 +97,14 @@ jobs:
           output: sbom.json
 
       - name: Docker Scout Recommendations
-        uses: docker/scout-action@v1
+        uses: docker/scout-action@7c6b6c3f7844478ace1ffd4e7aef649053d1f87d # v1.24.0
         if: github.ref == 'refs/heads/main'
         with:
           command: recommendations
           image: lionelschiepers/stockquote-node-api:github-latest
 
       - name: Trivy Vulnerability Scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         if: github.ref == 'refs/heads/main'
         with:
           image-ref: 'lionelschiepers/stockquote-node-api:github-latest'
@@ -113,13 +113,13 @@ jobs:
           severity: 'CRITICAL,HIGH,MEDIUM'
 
       - name: Upload Trivy SARIF Report
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
         if: github.ref == 'refs/heads/main'
         with:
           sarif_file: trivy-results.sarif
 
       - name: Publish SARIF Report as artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: github.ref == 'refs/heads/main'
         with:
           name: sarif-report
@@ -131,7 +131,7 @@ jobs:
       #        cat sarif.output.json
 
       - name: Upload Docker Scout SARIF Report
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
         if: github.ref == 'refs/heads/main'
         with:
           sarif_file: report.sarif
