@@ -8,12 +8,13 @@ const mockContext = {
 
 describe('YahooFinanceService', () => {
   let service: YahooFinanceService;
-  let mockYahooFinance: { quote: jest.Mock; chart: jest.Mock };
+  let mockYahooFinance: { quote: jest.Mock; chart: jest.Mock; quoteSummary: jest.Mock };
 
   beforeEach(() => {
     mockYahooFinance = {
       quote: jest.fn(),
       chart: jest.fn(),
+      quoteSummary: jest.fn(),
     };
     service = new YahooFinanceService(mockYahooFinance);
     (mockContext.log as jest.Mock).mockClear();
@@ -220,6 +221,54 @@ describe('YahooFinanceService', () => {
 
       expect(mockContext.error).toHaveBeenCalledWith(
         `Error fetching historical data from Yahoo Finance: ${error.message}`,
+        error,
+      );
+    });
+  });
+
+  describe('getQuoteSummary', () => {
+    it('should call yahoo.quoteSummary with the requested modules', async () => {
+      const request = {
+        ticker: 'AAPL',
+        modules: ['financialData', 'recommendationTrend'],
+      };
+      const rawResponse = {
+        financialData: { targetMeanPrice: 200, recommendationKey: 'buy' },
+        recommendationTrend: { trend: [] },
+      };
+      mockYahooFinance.quoteSummary.mockResolvedValue(rawResponse);
+
+      const response = await service.getQuoteSummary(request, mockContext);
+
+      expect(mockYahooFinance.quoteSummary).toHaveBeenCalledWith('AAPL', {
+        modules: ['financialData', 'recommendationTrend'],
+      });
+      expect(response).toEqual(rawResponse);
+      expect(mockContext.log).toHaveBeenCalledWith(
+        'Fetching quote summary for ticker: AAPL with modules: financialData,recommendationTrend',
+      );
+    });
+
+    it('should use default modules when none are provided', async () => {
+      const request = { ticker: 'AAPL' };
+      mockYahooFinance.quoteSummary.mockResolvedValue({});
+
+      await service.getQuoteSummary(request, mockContext);
+
+      expect(mockYahooFinance.quoteSummary).toHaveBeenCalledWith('AAPL', {
+        modules: ['financialData', 'defaultKeyStatistics', 'recommendationTrend'],
+      });
+    });
+
+    it('should throw an error and log it when yahoo.quoteSummary fails', async () => {
+      const request = { ticker: 'FAIL', modules: ['financialData'] };
+      const error = new Error('Failed to fetch summary');
+      mockYahooFinance.quoteSummary.mockRejectedValue(error);
+
+      await expect(service.getQuoteSummary(request, mockContext)).rejects.toThrow(error);
+
+      expect(mockContext.error).toHaveBeenCalledWith(
+        `Error fetching quote summary from Yahoo Finance: ${error.message}`,
         error,
       );
     });
@@ -468,6 +517,37 @@ describe('YahooFinanceService', () => {
     it('should return isValid: true for a valid limit', () => {
       const result = service.validateOptionsRequest('AAPL', undefined, undefined, undefined, 10);
       expect(result.isValid).toBe(true);
+    });
+  });
+
+  describe('validateSummaryRequest', () => {
+    it('should return isValid: true for valid input', () => {
+      const result = service.validateSummaryRequest('AAPL', ['financialData', 'recommendationTrend']);
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should return isValid: true when modules are undefined', () => {
+      const result = service.validateSummaryRequest('AAPL');
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should return isValid: false if ticker is missing', () => {
+      const result = service.validateSummaryRequest('');
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Ticker must be provided');
+    });
+
+    it('should return isValid: false for an invalid module', () => {
+      const result = service.validateSummaryRequest('AAPL', ['notAModule']);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Invalid modules: notAModule');
+    });
+
+    it('should return isValid: false if more than 20 modules are provided', () => {
+      const modules = new Array(21).fill('financialData');
+      const result = service.validateSummaryRequest('AAPL', modules);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Maximum 20 modules allowed per request');
     });
   });
 });

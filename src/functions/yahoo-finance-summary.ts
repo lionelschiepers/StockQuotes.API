@@ -1,0 +1,169 @@
+import type { HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
+import { app } from '@azure/functions';
+import { getServiceContainer } from '../di/container';
+import { apiRateLimiter } from '../services/rateLimiter';
+import { cacheService } from '../services/cacheService';
+
+interface RateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  resetTime: number;
+}
+
+function buildHeaders(rateLimit: RateLimitResult, etag: string, cacheStatus?: 'HIT' | 'MISS') {
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control': 'max-age=300',
+    ETag: etag,
+    'X-RateLimit-Limit': apiRateLimiter.getMaxRequests().toString(),
+    'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+    'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
+  };
+
+  if (cacheStatus) {
+    headers['X-Cache'] = cacheStatus;
+    headers['Content-Type'] = 'application/json';
+  }
+
+  return headers;
+}
+
+function handleSummaryError(error: unknown, context: InvocationContext): HttpResponseInit {
+  context.error('Error in yahooFinanceSummaryHandler:', error);
+
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Content-Type': 'application/json',
+  };
+
+  if (error && typeof error === 'object') {
+    const errObj = error as Record<string, unknown>;
+    if (errObj.response && typeof errObj.response === 'object') {
+      const response = errObj.response as Record<string, unknown>;
+      return {
+        status: (response.status as number) ?? 502,
+        jsonBody: {
+          error: 'External API error',
+          message: (response.statusText as string) ?? 'Unknown error',
+          status: response.status,
+        },
+        headers: corsHeaders,
+      };
+    }
+    if (errObj.code === 'ECONNABORTED' || errObj.code === 'ETIMEDOUT') {
+      return {
+        status: 408,
+        jsonBody: { error: 'Request timeout', message: 'External service is not responding' },
+        headers: corsHeaders,
+      };
+    }
+    if (errObj.code === 429) {
+      return {
+        status: 429,
+        jsonBody: { error: 'Too Many Requests', message: 'Yahoo Finance rate limit exceeded. Please try again later.' },
+        headers: corsHeaders,
+      };
+    }
+  }
+
+  return {
+    status: 500,
+    jsonBody: {
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'An unexpected error occurred',
+    },
+    headers: corsHeaders,
+  };
+}
+
+export async function yahooFinanceSummaryHandler(
+  request: HttpRequest,
+  context: InvocationContext,
+): Promise<HttpResponseInit> {
+  context.log('HTTP trigger YahooFinanceSummary launched');
+
+  try {
+    const clientIp = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown';
+    const rateLimit = apiRateLimiter.isAllowed(clientIp);
+
+    if (!rateLimit.allowed) {
+      return {
+        status: 429,
+        jsonBody: {
+          error: 'Too many requests',
+          message: 'Rate limit exceeded. Please try again later.',
+          retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
+        },
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json',
+          'X-RateLimit-Limit': apiRateLimiter.getMaxRequests().toString(),
+          'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+          'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
+          'Retry-After': Math.ceil((rateLimit.resetTime - Date.now()) / 1000).toString(),
+        },
+      };
+    }
+
+    const ticker = request.query.get('ticker');
+    const modulesParam = request.query.get('modules');
+    const modules = modulesParam
+      ? modulesParam
+          .split(',')
+          .map((m) => m.trim())
+          .filter((m) => m.length > 0)
+      : undefined;
+
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Content-Type': 'application/json',
+    };
+
+    if (!ticker) {
+      return {
+        status: 400,
+        jsonBody: { error: 'Missing required parameter: ticker' },
+        headers: corsHeaders,
+      };
+    }
+
+    const { yahooFinanceService } = getServiceContainer();
+    const validation = yahooFinanceService.validateSummaryRequest(ticker, modules);
+    if (!validation.isValid) {
+      return {
+        status: 400,
+        jsonBody: { error: validation.error },
+        headers: corsHeaders,
+      };
+    }
+
+    const sortedModules = modules ? [...modules].sort((a, b) => a.localeCompare(b)).join(',') : 'default';
+    const cacheKey = `summary:${ticker}:${sortedModules}`;
+    const etag = `"${Buffer.from(cacheKey).toString('base64')}"`;
+
+    if (request.headers.get('If-None-Match') === etag) {
+      context.log(`ETag match for ${cacheKey}, returning 304`);
+      return { status: 304, headers: buildHeaders(rateLimit, etag) };
+    }
+
+    const cached = cacheService.get<unknown>(cacheKey);
+    if (cached) {
+      context.log(`Cache hit for ${cacheKey}`);
+      return { jsonBody: cached, headers: buildHeaders(rateLimit, etag, 'HIT') };
+    }
+
+    const data = await yahooFinanceService.getQuoteSummary({ ticker, modules }, context);
+    cacheService.set(cacheKey, data, 300 * 1000);
+    context.log(`Cache stored for ${cacheKey}`);
+
+    return { jsonBody: data, headers: buildHeaders(rateLimit, etag, 'MISS') };
+  } catch (error: unknown) {
+    return handleSummaryError(error, context);
+  }
+}
+
+app.http('yahoo-finance-summary', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  handler: yahooFinanceSummaryHandler,
+});

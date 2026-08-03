@@ -1,6 +1,44 @@
 import type { InvocationContext } from '@azure/functions';
 import YahooFinance from 'yahoo-finance2';
 
+const SUMMARY_MODULES = [
+  'assetProfile',
+  'balanceSheetHistory',
+  'balanceSheetHistoryQuarterly',
+  'calendarEvents',
+  'cashflowStatementHistory',
+  'cashflowStatementHistoryQuarterly',
+  'defaultKeyStatistics',
+  'earnings',
+  'earningsHistory',
+  'earningsTrend',
+  'financialData',
+  'fundOwnership',
+  'fundPerformance',
+  'fundProfile',
+  'incomeStatementHistory',
+  'incomeStatementHistoryQuarterly',
+  'indexTrend',
+  'industryTrend',
+  'insiderHolders',
+  'insiderTransactions',
+  'institutionOwnership',
+  'majorDirectHolders',
+  'majorHoldersBreakdown',
+  'netSharePurchaseActivity',
+  'price',
+  'quoteType',
+  'recommendationTrend',
+  'secFilings',
+  'sectorTrend',
+  'summaryDetail',
+  'summaryProfile',
+  'topHoldings',
+  'upgradeDowngradeHistory',
+] as const;
+
+const DEFAULT_SUMMARY_MODULES = ['financialData', 'defaultKeyStatistics', 'recommendationTrend'];
+
 export interface YahooFinanceQuoteRequest {
   symbols: string[];
   fields?: string[];
@@ -20,6 +58,11 @@ export interface YahooFinanceOptionsRequest {
   expirationDatesCount?: number;
   filter?: Array<'calls' | 'puts'>;
   limit?: number;
+}
+
+export interface YahooFinanceSummaryRequest {
+  ticker: string;
+  modules?: string[];
 }
 
 export interface YahooFinanceResponse {
@@ -196,6 +239,25 @@ export class YahooFinanceService {
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         context.error(`Error fetching historical data from Yahoo Finance: ${errorMessage}`, error);
+        throw error;
+      }
+    });
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getQuoteSummary(request: YahooFinanceSummaryRequest, context: InvocationContext): Promise<any> {
+    return this.enqueue(async () => {
+      try {
+        const modules = request.modules && request.modules.length > 0 ? request.modules : [...DEFAULT_SUMMARY_MODULES];
+        context.log(`Fetching quote summary for ticker: ${request.ticker} with modules: ${modules.join(',')}`);
+
+        const response = await this.yahooFinance.quoteSummary(request.ticker, { modules });
+
+        context.log(`Successfully retrieved quote summary for ${request.ticker}`);
+        return response;
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        context.error(`Error fetching quote summary from Yahoo Finance: ${errorMessage}`, error);
         throw error;
       }
     });
@@ -520,5 +582,25 @@ export class YahooFinanceService {
       this.validateOptionsLimit(limit);
 
     return error ? { isValid: false, error } : { isValid: true };
+  }
+
+  validateSummaryRequest(ticker: string, modules?: string[]): { isValid: boolean; error?: string } {
+    if (!ticker || ticker.trim().length === 0) {
+      return { isValid: false, error: 'Ticker must be provided' };
+    }
+
+    if (modules && modules.length > 0) {
+      const invalidModules = modules.filter(
+        (m) => !m || !SUMMARY_MODULES.includes(m as (typeof SUMMARY_MODULES)[number]),
+      );
+      if (invalidModules.length > 0) {
+        return { isValid: false, error: `Invalid modules: ${invalidModules.join(', ')}` };
+      }
+      if (modules.length > 20) {
+        return { isValid: false, error: 'Maximum 20 modules allowed per request' };
+      }
+    }
+
+    return { isValid: true };
   }
 }
