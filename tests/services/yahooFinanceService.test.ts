@@ -8,13 +8,19 @@ const mockContext = {
 
 describe('YahooFinanceService', () => {
   let service: YahooFinanceService;
-  let mockYahooFinance: { quote: jest.Mock; chart: jest.Mock; quoteSummary: jest.Mock };
+  let mockYahooFinance: {
+    quote: jest.Mock;
+    chart: jest.Mock;
+    quoteSummary: jest.Mock;
+    options: jest.Mock;
+  };
 
   beforeEach(() => {
     mockYahooFinance = {
       quote: jest.fn(),
       chart: jest.fn(),
       quoteSummary: jest.fn(),
+      options: jest.fn(),
     };
     service = new YahooFinanceService(mockYahooFinance);
     (mockContext.log as jest.Mock).mockClear();
@@ -435,6 +441,69 @@ describe('YahooFinanceService', () => {
       const result = service.validateHistoricalRequest('AAPL', '1970-01-01', '2024-01-01', '1mo');
       expect(result.isValid).toBe(false);
       expect(result.error).toBe('Date range exceeds maximum of 50 years for monthly interval');
+    });
+  });
+
+  describe('getOptions', () => {
+    it('should call yahoo.options with the correct parameters and return the result', async () => {
+      const request = { ticker: 'AAPL' };
+      const rawResponse = {
+        underlyingSymbol: 'AAPL',
+        expirationDates: [new Date('2026-08-07')],
+        strikes: [100, 110],
+        hasMiniOptions: false,
+        quote: { regularMarketPrice: 150 },
+        options: [{ expirationDate: new Date('2026-08-07'), calls: [], puts: [] }],
+      };
+      mockYahooFinance.options.mockResolvedValue(rawResponse);
+
+      const response = await service.getOptions(request, mockContext);
+
+      expect(mockYahooFinance.options).toHaveBeenCalledWith('AAPL', {}, { validateResult: false });
+      expect(response).toEqual(rawResponse);
+    });
+
+    it('should call yahoo.options with a date when expirationDate is provided', async () => {
+      const request = { ticker: 'AAPL', expirationDate: '2026-08-07' };
+      const rawResponse = { underlyingSymbol: 'AAPL', expirationDates: [], options: [] };
+      mockYahooFinance.options.mockResolvedValue(rawResponse);
+
+      await service.getOptions(request, mockContext);
+
+      expect(mockYahooFinance.options).toHaveBeenCalledWith(
+        'AAPL',
+        { date: new Date('2026-08-07') },
+        { validateResult: false },
+      );
+    });
+
+    it('should return an empty options structure when yahoo.options resolves to undefined', async () => {
+      const request = { ticker: 'ZZZZZZQQQQ' };
+      mockYahooFinance.options.mockResolvedValue(undefined);
+
+      const response = await service.getOptions(request, mockContext);
+
+      expect(response).toEqual({
+        underlyingSymbol: 'ZZZZZZQQQQ',
+        expirationDates: [],
+        strikes: [],
+        hasMiniOptions: false,
+        quote: { regularMarketPrice: 0 },
+        options: [],
+      });
+    });
+
+    it('should throw an error and log it when yahoo.options fails', async () => {
+      const request = { ticker: 'AAPL' };
+      const error = new Error('Failed to fetch options');
+      mockYahooFinance.options.mockRejectedValue(error);
+
+      await expect(service.getOptions(request, mockContext)).rejects.toThrow(error);
+
+      expect(mockContext.error).toHaveBeenCalledWith(
+        `Error fetching options from Yahoo Finance: ${error.message}`,
+        error,
+      );
     });
   });
 

@@ -406,12 +406,12 @@ export class YahooFinanceService {
 
         if (request.expirationDate) {
           const options: { date: Date } = { date: new Date(request.expirationDate) };
-          const response = await this.yahooFinance.options(request.ticker, options);
+          const response = await this.fetchOptions(request.ticker, options);
           context.log(`Successfully retrieved options for ${request.ticker}`);
           return this.applyOptionsFilters(response, request);
         }
 
-        const initialResponse = await this.yahooFinance.options(request.ticker, {});
+        const initialResponse = await this.fetchOptions(request.ticker, {});
         const allExpirationDates: Date[] = initialResponse.expirationDates ?? [];
 
         if (request.expirationDatesCount && request.expirationDatesCount > 1 && allExpirationDates.length > 1) {
@@ -424,7 +424,7 @@ export class YahooFinanceService {
 
           for (const expDate of datesToFetch) {
             const options: { date: Date } = { date: expDate };
-            const response = await this.yahooFinance.options(request.ticker, options);
+            const response = await this.fetchOptions(request.ticker, options);
             if (response.options?.[0]) {
               allOptions.push(response.options[0]);
             }
@@ -443,6 +443,24 @@ export class YahooFinanceService {
         throw error;
       }
     });
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async fetchOptions(ticker: string, options: { date?: Date }): Promise<any> {
+    const response = await this.yahooFinance.options(ticker, options, { validateResult: false });
+
+    if (!response) {
+      return {
+        underlyingSymbol: ticker,
+        expirationDates: [],
+        strikes: [],
+        hasMiniOptions: false,
+        quote: { regularMarketPrice: 0 },
+        options: [],
+      };
+    }
+
+    return response;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
