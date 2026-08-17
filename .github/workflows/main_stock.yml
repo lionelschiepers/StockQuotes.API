@@ -11,7 +11,7 @@ on:
 
 env:
   AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
-  NODE_VERSION: '22.x' # set this to the node version to use (supports 8.x, 10.x, 12.x)
+  NODE_VERSION: '24' # set this to the node version to use (supports 8.x, 10.x, 12.x)
 
 jobs:
   build:
@@ -21,31 +21,27 @@ jobs:
 
     steps:
       - name: 'Checkout GitHub Action'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        uses: actions/checkout@v4
 
       - name: Setup Node ${{ env.NODE_VERSION }} Environment
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@v3
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
 
-      - name: 'Resolve Project Dependencies Using Pnpm'
+      - name: 'Resolve Project Dependencies Using Npm'
         shell: bash
         run: |
           pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
-          pnpm install --ignore-scripts
-          pnpm run build
-          pnpm run test
+          npm install
+          npm run build --if-present
+          npm run test --if-present
           popd
 
       - name: Zip artifact for deployment
         run: zip release.zip ./* -r
 
       - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@v4
         with:
           name: node-app
           path: release.zip
@@ -59,7 +55,7 @@ jobs:
 
     steps:
       - name: Download artifact from build job
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@v4
         with:
           name: node-app
 
@@ -69,14 +65,14 @@ jobs:
           rm release.zip
       
       - name: Login to Azure
-        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_DD60F88340324DDAA7F2FE844416338F }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_D7B1DE2D5FE14235869482C989931474 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_5D5DCD9BF71043C39E155792A8A43138 }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_C3DD089594E141DA94A9A2C977ED10A5 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_1E77A4FEA72C4FAD9EF0474E6451FEE4 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_EC0B7D9CA658452DBB1964FD4D8A1AAB }}
 
       - name: 'Run Azure Functions Action'
-        uses: Azure/functions-action@bc63708cc6539760eea18d8a7de4ce8ef5fdf593 # v1.5.6
+        uses: Azure/functions-action@v1
         id: fa
         with:
           app-name: 'stock'
