@@ -4,6 +4,7 @@ import { getServiceContainer } from '../../src/di/container';
 import type { YahooFinanceService } from '../../src/services/yahooFinanceService';
 import { strictRateLimiter } from '../../src/services/rateLimiter';
 import { cacheService } from '../../src/services/cacheService';
+import { computeETag } from '../../src/utils/etag';
 
 // Mock the dependencies
 jest.mock('../../src/di/container');
@@ -200,12 +201,12 @@ describe('yahooFinanceHistoricalHandler', () => {
   });
 
   it('should return 304 Not Modified when If-None-Match matches ETag', async () => {
+    const expectedData = { quotes: [{ date: '2024-01-01', close: 100 }] };
     mockYahooFinanceService.validateHistoricalRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getHistoricalData.mockResolvedValue(expectedData);
 
-    // Calculate expected ETag
-    const today = new Date().toISOString().split('T')[0];
-    const cacheKey = `hist:${today}:AAPL:2024-01-01:2024-01-02:1d:all`;
-    const expectedETag = `"${Buffer.from(cacheKey).toString('base64')}"`;
+    // Calculate expected ETag from the payload
+    const expectedETag = computeETag(expectedData);
 
     const request = mockRequest(
       { ticker: 'AAPL', from: '2024-01-01', to: '2024-01-02' },
@@ -216,8 +217,7 @@ describe('yahooFinanceHistoricalHandler', () => {
     expect(response.status).toBe(304);
     expect(response.jsonBody).toBeUndefined();
     expect(response.headers).toHaveProperty('ETag', expectedETag);
-    expect(mockYahooFinanceService.getHistoricalData).not.toHaveBeenCalled();
-    expect(mockCacheService.get).not.toHaveBeenCalled();
+    expect(mockYahooFinanceService.getHistoricalData).toHaveBeenCalled();
   });
 
   it('should return fresh data when If-None-Match does not match ETag', async () => {

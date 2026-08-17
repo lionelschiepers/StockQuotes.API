@@ -2,6 +2,7 @@ import type { HttpRequest, InvocationContext } from '@azure/functions';
 import { getServiceContainer } from '../../src/di/container';
 import { apiRateLimiter } from '../../src/services/rateLimiter';
 import { cacheService } from '../../src/services/cacheService';
+import { computeETag } from '../../src/utils/etag';
 
 jest.mock('../../src/di/container');
 jest.mock('../../src/services/rateLimiter');
@@ -148,15 +149,17 @@ describe('yahooFinanceSummaryHandler', () => {
   });
 
   it('should return 304 on ETag match', async () => {
+    const expectedData = { financialData: { targetMeanPrice: 200 } };
     mockYahooFinanceService.validateSummaryRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getQuoteSummary.mockResolvedValue(expectedData);
 
-    const cacheKey = 'summary:AAPL:default';
-    const etag = `"${Buffer.from(cacheKey).toString('base64')}"`;
+    const etag = computeETag(expectedData);
 
     const request = mockRequest({ ticker: 'AAPL' }, { 'If-None-Match': etag });
     const response = await yahooFinanceSummaryHandler(request, mockContext);
 
     expect(response.status).toBe(304);
+    expect(response.headers).toMatchObject({ ETag: etag });
   });
 
   it('should handle service errors', async () => {

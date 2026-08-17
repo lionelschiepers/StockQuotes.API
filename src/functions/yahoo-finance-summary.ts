@@ -3,6 +3,7 @@ import { app } from '@azure/functions';
 import { getServiceContainer } from '../di/container';
 import { apiRateLimiter } from '../services/rateLimiter';
 import { cacheService } from '../services/cacheService';
+import { computeETag, matchesETag } from '../utils/etag';
 
 interface RateLimitResult {
   allowed: boolean;
@@ -139,15 +140,15 @@ export async function yahooFinanceSummaryHandler(
 
     const sortedModules = modules ? [...modules].sort((a, b) => a.localeCompare(b)).join(',') : 'default';
     const cacheKey = `summary:${ticker}:${sortedModules}`;
-    const etag = `"${Buffer.from(cacheKey).toString('base64')}"`;
-
-    if (request.headers.get('If-None-Match') === etag) {
-      context.log(`ETag match for ${cacheKey}, returning 304`);
-      return { status: 304, headers: buildHeaders(rateLimit, etag) };
-    }
+    const incomingEtag = request.headers.get('If-None-Match');
 
     const cached = cacheService.get<unknown>(cacheKey);
     if (cached) {
+      const etag = computeETag(cached);
+      if (matchesETag(incomingEtag, cached)) {
+        context.log(`ETag match for ${cacheKey}, returning 304`);
+        return { status: 304, headers: buildHeaders(rateLimit, etag) };
+      }
       context.log(`Cache hit for ${cacheKey}`);
       return { jsonBody: cached, headers: buildHeaders(rateLimit, etag, 'HIT') };
     }
@@ -155,6 +156,12 @@ export async function yahooFinanceSummaryHandler(
     const data = await yahooFinanceService.getQuoteSummary({ ticker, modules }, context);
     cacheService.set(cacheKey, data, 300 * 1000);
     context.log(`Cache stored for ${cacheKey}`);
+
+    const etag = computeETag(data);
+    if (matchesETag(incomingEtag, data)) {
+      context.log(`ETag match for ${cacheKey}, returning 304`);
+      return { status: 304, headers: buildHeaders(rateLimit, etag) };
+    }
 
     return { jsonBody: data, headers: buildHeaders(rateLimit, etag, 'MISS') };
   } catch (error: unknown) {

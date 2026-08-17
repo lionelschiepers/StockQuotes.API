@@ -2,6 +2,7 @@ import type { HttpRequest, InvocationContext } from '@azure/functions';
 import { getServiceContainer } from '../../src/di/container';
 import { strictRateLimiter } from '../../src/services/rateLimiter';
 import { cacheService } from '../../src/services/cacheService';
+import { computeETag } from '../../src/utils/etag';
 
 // Mock the dependencies
 jest.mock('../../src/di/container');
@@ -201,20 +202,50 @@ describe('yahooFinanceHandler', () => {
     expect(mockCacheService.set).toHaveBeenCalledWith('quotes:AAPL:all', freshData, 60000);
   });
 
-  it('should return 304 Not Modified when ETag matches If-None-Match', async () => {
+  it('should return 304 Not Modified when ETag matches cached payload', async () => {
+    const expectedData = { AAPL: { regularMarketPrice: 150 } };
     mockYahooFinanceService.validateQuoteRequest.mockReturnValue({ isValid: true });
+    mockCacheService.get.mockReturnValue(expectedData);
 
-    const expectedKey = 'quotes:AAPL:all';
-    const etag = `"${Buffer.from(expectedKey).toString('base64')}"`;
+    const etag = computeETag(expectedData);
 
     const request = mockRequest({ symbols: 'AAPL' }, { 'If-None-Match': etag });
     const response = await yahooFinanceHandler(request, mockContext);
 
     expect(response.status).toBe(304);
-    expect(response.headers).toMatchObject({
-      ETag: etag,
-    });
+    expect(response.headers).toMatchObject({ ETag: etag });
     expect(mockYahooFinanceService.getQuotes).not.toHaveBeenCalled();
-    expect(mockCacheService.get).not.toHaveBeenCalled();
+  });
+
+  it('should return 304 Not Modified when ETag matches freshly fetched payload', async () => {
+    const expectedData = { AAPL: { regularMarketPrice: 150 } };
+    mockYahooFinanceService.validateQuoteRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getQuotes.mockResolvedValue(expectedData);
+    mockCacheService.get.mockReturnValue(null);
+
+    const etag = computeETag(expectedData);
+
+    const request = mockRequest({ symbols: 'AAPL' }, { 'If-None-Match': etag });
+    const response = await yahooFinanceHandler(request, mockContext);
+
+    expect(response.status).toBe(304);
+    expect(response.headers).toMatchObject({ ETag: etag });
+    expect(mockYahooFinanceService.getQuotes).toHaveBeenCalled();
+  });
+
+  it('should return fresh data when If-None-Match does not match payload ETag', async () => {
+    const expectedData = { AAPL: { regularMarketPrice: 150 } };
+    mockYahooFinanceService.validateQuoteRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getQuotes.mockResolvedValue(expectedData);
+
+    const request = mockRequest({ symbols: 'AAPL' }, { 'If-None-Match': '"different-etag"' });
+    const response = await yahooFinanceHandler(request, mockContext);
+
+    expect(response.status).toBeUndefined();
+    expect(response.jsonBody).toEqual(expectedData);
+    expect(response.headers).toMatchObject({
+      ETag: computeETag(expectedData),
+      'X-Cache': 'MISS',
+    });
   });
 });

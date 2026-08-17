@@ -2,6 +2,7 @@ import type { HttpRequest, InvocationContext } from '@azure/functions';
 import { getServiceContainer } from '../../src/di/container';
 import { strictRateLimiter } from '../../src/services/rateLimiter';
 import { cacheService } from '../../src/services/cacheService';
+import { computeETag } from '../../src/utils/etag';
 
 jest.mock('../../src/di/container');
 jest.mock('../../src/services/rateLimiter');
@@ -405,16 +406,23 @@ describe('yahooFinanceOptionsHandler', () => {
   });
 
   it('should return 304 on ETag match', async () => {
+    const expectedData = {
+      underlyingSymbol: 'AAPL',
+      expirationDates: [new Date('2025-03-21')],
+      strikes: [150, 155, 160],
+      calls: [],
+      puts: [],
+    };
     mockYahooFinanceService.validateOptionsRequest.mockReturnValue({ isValid: true });
+    mockYahooFinanceService.getOptions.mockResolvedValue(expectedData);
 
-    const today = new Date().toISOString().split('T')[0];
-    const cacheKey = `options:${today}:AAPL:all:all:all:all`;
-    const etag = `"${Buffer.from(cacheKey).toString('base64')}"`;
+    const etag = computeETag(expectedData);
 
     const request = mockRequest({ ticker: 'AAPL' }, { 'If-None-Match': etag });
     const response = await yahooFinanceOptionsHandler(request, mockContext);
 
     expect(response.status).toBe(304);
+    expect(response.headers).toMatchObject({ ETag: etag });
   });
 
   it('should handle service errors', async () => {

@@ -4,6 +4,7 @@ import { getServiceContainer } from '../di/container';
 import { strictRateLimiter } from '../services/rateLimiter';
 
 import { cacheService } from '../services/cacheService';
+import { computeETag, matchesETag } from '../utils/etag';
 
 const { yahooFinanceService } = getServiceContainer();
 
@@ -111,42 +112,37 @@ export async function yahooFinanceHandler(request: HttpRequest, context: Invocat
       };
     }
 
-    // Build cache key and etag
+    // Build cache key
     const sortedSymbols = [...querySymbols].sort((a, b) => a.localeCompare(b)).join(',');
     const sortedFields = queryFields ? [...queryFields].sort((a, b) => a.localeCompare(b)).join(',') : 'all';
     const cacheKey = `quotes:${sortedSymbols}:${sortedFields}`;
-    const etag = `"${Buffer.from(cacheKey).toString('base64')}"`;
+    const incomingEtag = request.headers.get('If-None-Match');
 
-    const commonHeaders = {
+    const buildHeaders = (etag: string, cacheStatus?: 'HIT' | 'MISS') => ({
       'Access-Control-Allow-Origin': '*',
       ETag: etag,
       'X-RateLimit-Limit': strictRateLimiter.getMaxRequests().toString(),
       'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
       'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
-    };
-
-    // Check ETag
-    if (request.headers.get('If-None-Match') === etag) {
-      context.log(`ETag match for ${cacheKey}, returning 304`);
-      return {
-        status: 304,
-        headers: commonHeaders,
-      };
-    }
+      ...(cacheStatus
+        ? {
+            'Cache-Control': 'max-age=60',
+            'Content-Type': 'application/json',
+            'X-Cache': cacheStatus,
+          }
+        : {}),
+    });
 
     // Check Server Cache (60 seconds short timer)
     const cached = cacheService.get<unknown>(cacheKey);
     if (cached) {
+      const etag = computeETag(cached);
+      if (matchesETag(incomingEtag, cached)) {
+        context.log(`ETag match for ${cacheKey}, returning 304`);
+        return { status: 304, headers: buildHeaders(etag) };
+      }
       context.log(`Cache hit for ${cacheKey}`);
-      return {
-        jsonBody: cached,
-        headers: {
-          ...commonHeaders,
-          'Cache-Control': 'max-age=60',
-          'Content-Type': 'application/json',
-          'X-Cache': 'HIT',
-        },
-      };
+      return { jsonBody: cached, headers: buildHeaders(etag, 'HIT') };
     }
 
     const responseMessage = await yahooFinanceService.getQuotes(
@@ -158,15 +154,13 @@ export async function yahooFinanceHandler(request: HttpRequest, context: Invocat
     cacheService.set(cacheKey, responseMessage, 60 * 1000);
     context.log(`Cache stored for ${cacheKey}`);
 
-    return {
-      jsonBody: responseMessage,
-      headers: {
-        ...commonHeaders,
-        'Cache-Control': 'max-age=60',
-        'Content-Type': 'application/json',
-        'X-Cache': 'MISS',
-      },
-    };
+    const etag = computeETag(responseMessage);
+    if (matchesETag(incomingEtag, responseMessage)) {
+      context.log(`ETag match for ${cacheKey}, returning 304`);
+      return { status: 304, headers: buildHeaders(etag) };
+    }
+
+    return { jsonBody: responseMessage, headers: buildHeaders(etag, 'MISS') };
   } catch (error: unknown) {
     context.error('Error in yahooFinanceHandler:', error);
     return mapYahooFinanceError(error);
