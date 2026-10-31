@@ -17,6 +17,7 @@ const root = path.resolve(import.meta.dirname, '..');
 const pidFile = path.join(root, '.dev', 'server.pid');
 const port = Number(process.env.FUNCTIONS_PORT ?? process.argv[2] ?? 7071);
 const isWindows = process.platform === 'win32';
+const systemRoot = process.env.SystemRoot ?? 'C:\\Windows';
 
 const targets = new Set();
 
@@ -35,7 +36,7 @@ function killTree(pid) {
 
   try {
     if (isWindows) {
-      execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+      execFileSync(path.join(systemRoot, 'System32', 'taskkill.exe'), ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
     } else {
       process.kill(pid, 'SIGTERM');
     }
@@ -60,7 +61,7 @@ function readSupervisorPid() {
   }
 
   // Guard against PID reuse: only kill it if it is still our dev supervisor.
-  const commandLine = run('powershell', [
+  const commandLine = run(path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'), [
     '-NoProfile',
     '-NonInteractive',
     '-Command',
@@ -72,10 +73,10 @@ function readSupervisorPid() {
 
 function findPortOwner() {
   if (isWindows) {
-    const listener = new RegExp(`^\\s*TCP\\s+\\S+:${port}\\s+\\S+\\s+LISTENING\\s+(\\d+)`, 'i');
+    const listener = new RegExp(String.raw`^\s*TCP\s+\S+:${port}\s+\S+\s+LISTENING\s+(\d+)`, 'i');
 
-    for (const line of run('netstat', ['-ano', '-p', 'tcp']).split(/\r?\n/)) {
-      const match = line.match(listener);
+    for (const line of run(path.join(systemRoot, 'System32', 'netstat.exe'), ['-ano', '-p', 'tcp']).split(/\r?\n/)) {
+      const match = listener.exec(line);
       if (match) {
         targets.add(Number(match[1]));
       }

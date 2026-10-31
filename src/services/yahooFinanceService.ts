@@ -474,15 +474,12 @@ export class YahooFinanceService {
             0,
             Math.min(request.expirationDatesCount, allExpirationDates.length),
           );
-          const allOptions: OptionsChainEntry[] = [];
-
-          for (const expDate of datesToFetch) {
-            const options: { date: Date } = { date: expDate };
-            const response = await this.fetchOptions(request.ticker, options);
-            if (response.options?.[0]) {
-              allOptions.push(response.options[0]);
-            }
-          }
+          const responses = await Promise.all(
+            datesToFetch.map((expDate) => this.fetchOptions(request.ticker, { date: expDate })),
+          );
+          const allOptions: OptionsChainEntry[] = responses.flatMap((response) =>
+            response.options?.[0] ? [response.options[0]] : [],
+          );
 
           initialResponse.options = allOptions;
           context.log(

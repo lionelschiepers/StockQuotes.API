@@ -21,6 +21,7 @@ const root = path.resolve(import.meta.dirname, '..');
 const stateDir = path.join(root, '.dev');
 const pidFile = path.join(stateDir, 'server.pid');
 const isWindows = process.platform === 'win32';
+const systemRoot = process.env.SystemRoot ?? 'C:\\Windows';
 
 mkdirSync(stateDir, { recursive: true });
 writeFileSync(pidFile, String(process.pid));
@@ -37,7 +38,7 @@ function killTree(pid) {
   try {
     if (isWindows) {
       // /T kills func.exe and the worker; /F avoids a hung graceful shutdown.
-      execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+      execFileSync(path.join(systemRoot, 'System32', 'taskkill.exe'), ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
     } else {
       process.kill(pid, 'SIGTERM');
     }
