@@ -134,6 +134,61 @@ describe('YahooFinanceService', () => {
       mockYahooFinance.quote.mockResolvedValueOnce({ symbol: 'D' });
       await expect(fastService.getQuotes({ symbols: ['D'] }, mockContext)).resolves.toEqual({ symbol: 'D' });
     });
+
+    it('does not leak slots when queued requests take over a slot', async () => {
+      type Deferred = {
+        promise: Promise<Record<string, unknown>>;
+        resolve: (value: Record<string, unknown>) => void;
+      };
+
+      const deferred = (): Deferred => {
+        let resolve!: Deferred['resolve'];
+        const promise = new Promise<Record<string, unknown>>((res) => {
+          resolve = res;
+        });
+        return { promise, resolve };
+      };
+
+      const d1 = deferred();
+      const d2 = deferred();
+      const d3 = deferred();
+      const d4 = deferred();
+      const pending = [d1, d2, d3, d4];
+
+      mockYahooFinance.quote.mockImplementation(() => {
+        const next = pending.shift();
+        return next ? next.promise : Promise.resolve({});
+      });
+
+      const fastService = new YahooFinanceService(mockYahooFinance, 200);
+      const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+      const first = fastService.getQuotes({ symbols: ['A'] }, mockContext);
+      const second = fastService.getQuotes({ symbols: ['B'] }, mockContext);
+      await flush();
+
+      const third = fastService.getQuotes({ symbols: ['C'] }, mockContext);
+      const fourth = fastService.getQuotes({ symbols: ['D'] }, mockContext);
+
+      // Completing the running pair hands both slots to the queued pair.
+      d1.resolve({ symbol: 'A' });
+      await flush();
+      d2.resolve({ symbol: 'B' });
+      await flush();
+      d3.resolve({ symbol: 'C' });
+      d4.resolve({ symbol: 'D' });
+
+      await expect(Promise.all([first, second, third, fourth])).resolves.toEqual([
+        { symbol: 'A' },
+        { symbol: 'B' },
+        { symbol: 'C' },
+        { symbol: 'D' },
+      ]);
+
+      // A leak would leave activeCount above the limit and time this out.
+      mockYahooFinance.quote.mockResolvedValueOnce({ symbol: 'E' });
+      await expect(fastService.getQuotes({ symbols: ['E'] }, mockContext)).resolves.toEqual({ symbol: 'E' });
+    });
   });
 
   describe('getHistoricalData', () => {

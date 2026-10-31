@@ -177,7 +177,8 @@ export class YahooFinanceService {
       const waiter: { resolve: () => void; timer: ReturnType<typeof setTimeout> } = {
         resolve: () => {
           clearTimeout(waiter.timer);
-          YahooFinanceService.activeCount++;
+          // The slot is transferred from the releasing request, so the active
+          // count must not change here.
           resolve();
         },
         timer: undefined as unknown as ReturnType<typeof setTimeout>,
