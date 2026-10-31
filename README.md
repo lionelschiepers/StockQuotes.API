@@ -16,22 +16,22 @@ This API serves as a dedicated backend for the [StockQuotes.React](https://githu
 
 ### ✨ Features
 
-*   **Real-time Stock Data:** Fetches stock quotes from Yahoo Finance.
-*   **Exchange Rates:** Retrieves daily euro exchange rates from the European Central Bank.
-*   **Rate Limiting:** Protects the API from abuse with a custom in-memory rate limiter.
-*   **Clean Architecture:** Follows a service-oriented architecture, making it easy to understand and extend.
-*   **Fully Tested:** Comes with a comprehensive test suite using Jest.
-*   **Modern Tooling:** Uses ESLint and Prettier for consistent code quality.
-*   **Automated Docker Builds:** Docker images are automatically built and published to [Docker Hub](https://hub.docker.com/r/lionelschiepers/stockquote-node-api).
-*   **Vulnerability Scanning:** Published Docker containers are scanned for security vulnerabilities.
+- **Real-time Stock Data:** Fetches stock quotes from Yahoo Finance.
+- **Exchange Rates:** Retrieves daily euro exchange rates from the European Central Bank.
+- **Rate Limiting:** Protects the API from abuse with a custom in-memory rate limiter.
+- **Clean Architecture:** Follows a service-oriented architecture, making it easy to understand and extend.
+- **Fully Tested:** Comes with a comprehensive test suite using Jest.
+- **Modern Tooling:** Uses ESLint and Prettier for consistent code quality.
+- **Automated Docker Builds:** Docker images are automatically built and published to [Docker Hub](https://hub.docker.com/r/lionelschiepers/stockquote-node-api).
+- **Vulnerability Scanning:** Published Docker containers are scanned for security vulnerabilities.
 
 ## 🛠️ Getting Started
 
 ### Prerequisites
 
-*   [Node.js](https://nodejs.org/)
-*   [pnpm](https://pnpm.io/)
-*   [Azure Functions Core Tools](https://github.com/Azure/azure-functions-core-tools)
+- [Node.js](https://nodejs.org/)
+- [pnpm](https://pnpm.io/)
+- [Azure Functions Core Tools](https://github.com/Azure/azure-functions-core-tools)
 
 ### Installation
 
@@ -61,36 +61,36 @@ This API serves as a dedicated backend for the [StockQuotes.React](https://githu
 
 The API will then be available at the following endpoints:
 
-*   **Yahoo Finance:** `http://localhost:7071/api/yahoo-finance`
-*   **ECB Exchange Rates:** `http://localhost:7071/api/exchange-rate-ecb`
+- **Yahoo Finance:** `http://localhost:7071/api/yahoo-finance`
+- **ECB Exchange Rates:** `http://localhost:7071/api/exchange-rate-ecb`
 
 ## 🧪 Testing
 
 This project uses [Jest](https://jestjs.io/) for both unit and integration tests.
 
-*   Run all tests:
-    ```bash
-    pnpm test
-    ```
-*   Run tests in watch mode:
-    ```bash
-    pnpm test -- --watch
-    ```
+- Run all tests:
+  ```bash
+  pnpm test
+  ```
+- Run tests in watch mode:
+  ```bash
+  pnpm test -- --watch
+  ```
 
 ## 💻 Development
 
 We follow a set of development conventions to ensure a high-quality codebase.
 
-*   **TypeScript:** The entire project is written in TypeScript.
-*   **Service-Oriented Architecture:** Business logic is encapsulated in services.
-*   **Dependency Injection:** We use a simple DI container to manage service instances.
-*   **Linting and Formatting:** We use ESLint and Prettier to maintain a consistent code style.
-    *   `pnpm run lint`
-    *   `pnpm run format`
+- **TypeScript:** The entire project is written in TypeScript.
+- **Service-Oriented Architecture:** Business logic is encapsulated in services.
+- **Dependency Injection:** We use a simple DI container to manage service instances.
+- **Linting and Formatting:** We use ESLint and Prettier to maintain a consistent code style.
+  - `pnpm run lint`
+  - `pnpm run format`
 
 ## 🙌 Contributing
 
-We welcome contributions of all kinds! Whether you're a seasoned developer or just starting, your help is valuable. Check out our [contributing guidelines]() to get started.
+We welcome contributions of all kinds! Whether you're a seasoned developer or just starting, your help is valuable. Check out our [contributing guidelines](<>) to get started.
 
 ## 📄 License
 

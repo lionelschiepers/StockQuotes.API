@@ -1,5 +1,7 @@
 allowBuilds:
+  '@parcel/watcher': true
   azure-functions-core-tools: true
   unrs-resolver: true
 minimumReleaseAgeExclude:
-  - axios@1.19.0
+  - axios@1.21.0
+  - eslint@10.14.0

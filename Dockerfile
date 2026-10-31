@@ -14,7 +14,7 @@ ARG ALPHAVANTAGE_API_KEY=demo
 # Build stage
 FROM mcr.microsoft.com/azure-functions/node:4-node24 AS builder
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@12.16.1 --activate
 
 WORKDIR /home/site/wwwroot
 
