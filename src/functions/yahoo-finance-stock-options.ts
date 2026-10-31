@@ -9,6 +9,7 @@ import { parseDelimitedList, parseOptionalInt } from '../http/request';
 import { buildHeaders, JSON_CONTENT_TYPE } from '../http/response';
 
 const CACHE_MAX_AGE_SECONDS = 300;
+const CACHE_TTL_MS = 300 * 1000;
 
 export async function yahooFinanceOptionsHandler(
   request: HttpRequest,
@@ -60,6 +61,7 @@ export async function yahooFinanceOptionsHandler(
       request,
       context,
       cacheKey,
+      ttlMs: CACHE_TTL_MS,
       fetch: () =>
         yahooFinanceService.getOptions(
           {

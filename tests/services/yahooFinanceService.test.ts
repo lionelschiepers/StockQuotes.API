@@ -1,4 +1,5 @@
 import { YahooFinanceService } from '../../src/services/yahooFinanceService';
+import { UpstreamTimeoutError } from '../../src/errors';
 import type { InvocationContext } from '@azure/functions';
 
 const mockContext = {
@@ -103,6 +104,35 @@ describe('YahooFinanceService', () => {
         `Error fetching quotes from Yahoo Finance: ${error.message}`,
         error,
       );
+    });
+  });
+
+  describe('upstream concurrency gate', () => {
+    it('rejects queued requests after the slot-wait timeout', async () => {
+      const pending: Array<(value: Record<string, unknown>) => void> = [];
+      mockYahooFinance.quote.mockImplementation(
+        () =>
+          new Promise<Record<string, unknown>>((resolve) => {
+            pending.push(resolve);
+          }),
+      );
+
+      const fastService = new YahooFinanceService(mockYahooFinance, 20);
+
+      const first = fastService.getQuotes({ symbols: ['A'] }, mockContext);
+      const second = fastService.getQuotes({ symbols: ['B'] }, mockContext);
+
+      await expect(fastService.getQuotes({ symbols: ['C'] }, mockContext)).rejects.toBeInstanceOf(UpstreamTimeoutError);
+
+      pending[0]({ symbol: 'A' });
+      pending[1]({ symbol: 'B' });
+
+      await expect(first).resolves.toEqual({ symbol: 'A' });
+      await expect(second).resolves.toEqual({ symbol: 'B' });
+
+      // The timed-out waiter must not have leaked a slot.
+      mockYahooFinance.quote.mockResolvedValueOnce({ symbol: 'D' });
+      await expect(fastService.getQuotes({ symbols: ['D'] }, mockContext)).resolves.toEqual({ symbol: 'D' });
     });
   });
 
@@ -384,6 +414,23 @@ describe('YahooFinanceService', () => {
       expect(result.error).toBe('Invalid from date');
     });
 
+    it('should reject days that do not exist in the month', () => {
+      const result = service.validateHistoricalRequest('AAPL', '2026-02-30', '2026-03-10');
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Invalid from date');
+    });
+
+    it('should reject a non-leap-year February 29', () => {
+      const result = service.validateHistoricalRequest('AAPL', '2023-02-29', '2023-03-10');
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Invalid from date');
+    });
+
+    it('should accept a leap-day range', () => {
+      const result = service.validateHistoricalRequest('AAPL', '2024-02-29', '2024-03-01');
+      expect(result.isValid).toBe(true);
+    });
+
     it('should return isValid: false if daily date range exceeds 5 years', () => {
       const result = service.validateHistoricalRequest('AAPL', '2019-01-01', '2024-01-02', '1d');
       expect(result.isValid).toBe(false);
@@ -533,6 +580,12 @@ describe('YahooFinanceService', () => {
 
     it('should return isValid: false if expirationDate is not a real date', () => {
       const result = service.validateOptionsRequest('AAPL', '2024-13-45');
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Invalid expiration date');
+    });
+
+    it('should return isValid: false for a calendar date that does not exist', () => {
+      const result = service.validateOptionsRequest('AAPL', '2026-02-30');
       expect(result.isValid).toBe(false);
       expect(result.error).toBe('Invalid expiration date');
     });

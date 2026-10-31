@@ -15,14 +15,16 @@ export interface RateLimiterLike {
   isAllowed(identifier: string): RateLimitResult;
 }
 
-class RateLimiter implements RateLimiterLike {
+export class RateLimiter implements RateLimiterLike {
   private readonly requests: Map<string, RateLimitEntry> = new Map();
   private readonly windowMs: number;
   private readonly maxRequests: number;
+  private readonly maxTrackedClients: number;
 
-  constructor(windowMs: number = 5000, maxRequests: number = 100) {
+  constructor(windowMs: number = 5000, maxRequests: number = 100, maxTrackedClients: number = 10_000) {
     this.windowMs = windowMs;
     this.maxRequests = maxRequests;
+    this.maxTrackedClients = maxTrackedClients;
 
     // Clean up expired entries every minute
     const cleanupInterval = setInterval(() => this.cleanup(), 60000);
@@ -43,6 +45,7 @@ class RateLimiter implements RateLimiterLike {
         count: 1,
         resetTime: now + this.windowMs,
       };
+      this.evictIfFull();
       this.requests.set(identifier, newEntry);
 
       return {
@@ -68,6 +71,31 @@ class RateLimiter implements RateLimiterLike {
       remaining: this.maxRequests - entry.count,
       resetTime: entry.resetTime,
     };
+  }
+
+  /**
+   * Bounds memory when clients are keyed by attacker-controlled headers:
+   * drop expired entries first, then the oldest tracked client.
+   */
+  private evictIfFull(): void {
+    if (this.requests.size < this.maxTrackedClients) {
+      return;
+    }
+
+    const now = Date.now();
+    for (const [key, entry] of this.requests.entries()) {
+      if (now > entry.resetTime) {
+        this.requests.delete(key);
+      }
+    }
+
+    while (this.requests.size >= this.maxTrackedClients) {
+      const oldestKey = this.requests.keys().next().value;
+      if (oldestKey === undefined) {
+        break;
+      }
+      this.requests.delete(oldestKey);
+    }
   }
 
   private cleanup(): void {

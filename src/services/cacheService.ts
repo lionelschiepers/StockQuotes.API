@@ -1,8 +1,11 @@
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // In-memory cache service with TTL support and optional disk persistence
 interface CacheEntry<T> {
+  /** Original cache key, kept for debugging persisted files. */
+  key?: string;
   data: T;
   timestamp: number;
   expiry?: number;
@@ -16,6 +19,11 @@ export class CacheService {
   private readonly cacheDir: string;
   private readonly maxEntries: number;
   private readonly maxDiskEntries: number;
+  private writesSinceDiskLimitCheck = 0;
+  private lastDiskLimitCheckMs = 0;
+
+  /** Disk pruning is expensive (readdir + stat); run it at most this often. */
+  private static readonly DISK_LIMIT_CHECK_INTERVAL_MS = 60_000;
 
   constructor() {
     this.cache = new Map();
@@ -61,9 +69,13 @@ export class CacheService {
     }
   }
 
+  /**
+   * Fixed-length filename derived from the key. Keys are attacker-influenced
+   * (symbols/fields), so hashing avoids `ENAMETOOLONG` and path traversal.
+   */
   private getCacheFilePath(key: string): string {
-    const sanitizedKey = key.replaceAll(/[:|]/g, '-').replaceAll(/[^a-zA-Z0-9._-]/g, '_');
-    return path.join(this.cacheDir, `${sanitizedKey}.json`);
+    const hashedKey = createHash('sha256').update(key).digest('hex');
+    return path.join(this.cacheDir, `${hashedKey}.json`);
   }
 
   private loadFromDisk<T>(key: string): CacheEntry<T> | null {
@@ -117,6 +129,7 @@ export class CacheService {
     }
 
     const entry: CacheEntry<T> = {
+      key,
       data,
       timestamp: Date.now(),
     };
@@ -132,7 +145,7 @@ export class CacheService {
       try {
         const filePath = this.getCacheFilePath(key);
         fs.writeFileSync(filePath, JSON.stringify(entry), 'utf8');
-        this.enforceDiskLimit();
+        this.maybeEnforceDiskLimit();
       } catch {
         // Ignore write errors
       }
@@ -155,6 +168,25 @@ export class CacheService {
       }
       this.cache.delete(oldestKey);
     }
+  }
+
+  /**
+   * Amortizes the O(n) disk scan: prune at most once per interval, or after
+   * `maxDiskEntries` writes have accumulated since the previous scan.
+   */
+  private maybeEnforceDiskLimit(): void {
+    this.writesSinceDiskLimitCheck++;
+    const now = Date.now();
+    const intervalElapsed = now - this.lastDiskLimitCheckMs >= CacheService.DISK_LIMIT_CHECK_INTERVAL_MS;
+    const writeBudgetExceeded = this.writesSinceDiskLimitCheck >= this.maxDiskEntries;
+
+    if (!intervalElapsed && !writeBudgetExceeded) {
+      return;
+    }
+
+    this.lastDiskLimitCheckMs = now;
+    this.writesSinceDiskLimitCheck = 0;
+    this.enforceDiskLimit();
   }
 
   private enforceDiskLimit(): void {

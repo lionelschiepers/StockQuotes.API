@@ -13,11 +13,36 @@ export function rateLimitHeaders(limiter: RateLimiterLike, result: RateLimitResu
 }
 
 /**
+ * Extracts the caller's IP from the proxy headers.
+ *
+ * `x-forwarded-for` is a comma-separated chain (`client, proxy1, proxy2`);
+ * only the left-most entry identifies the client. Using the raw header would
+ * let a caller mint unlimited rate-limit buckets.
+ */
+export function getClientIp(request: HttpRequest): string {
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    const [firstHop] = forwardedFor.split(',');
+    const clientIp = firstHop?.trim();
+    if (clientIp) {
+      return clientIp;
+    }
+  }
+
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp) {
+    return realIp;
+  }
+
+  return 'unknown';
+}
+
+/**
  * Applies the rate limiter for the calling client. On rejection the returned
  * `response` is a complete 429 payload ready to be returned by the handler.
  */
 export function enforceRateLimit(request: HttpRequest, limiter: RateLimiterLike): RateLimitCheck {
-  const clientIp = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown';
+  const clientIp = getClientIp(request);
   const result = limiter.isAllowed(clientIp);
 
   if (result.allowed) {

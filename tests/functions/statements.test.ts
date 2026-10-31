@@ -194,6 +194,27 @@ describe('statementsHandler', () => {
       expect(mockApiRateLimiter.isAllowed).toHaveBeenCalledWith('192.168.1.1');
     });
 
+    it('should use the first hop of x-forwarded-for', async () => {
+      mockApiRateLimiter.isAllowed.mockReturnValue({
+        allowed: true,
+        remaining: 99,
+        resetTime: Date.now() + 60000,
+      });
+
+      mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
+      mockAlphaVantageService.getFinancialStatements.mockResolvedValue({
+        symbol: 'IBM',
+        annualReports: [],
+        quarterlyReports: [],
+        cacheStatus: 'MISS',
+      });
+
+      const request = mockRequest({ ticker: 'IBM' }, { 'x-forwarded-for': '203.0.113.5, 10.0.0.1' });
+      await statementsHandler(request, mockContext);
+
+      expect(mockApiRateLimiter.isAllowed).toHaveBeenCalledWith('203.0.113.5');
+    });
+
     it('should use "unknown" when no IP headers are present', async () => {
       mockApiRateLimiter.isAllowed.mockReturnValue({
         allowed: true,

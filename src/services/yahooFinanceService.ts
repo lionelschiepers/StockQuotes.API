@@ -1,5 +1,7 @@
 import type { InvocationContext } from '@azure/functions';
 import YahooFinance from 'yahoo-finance2';
+import { UpstreamTimeoutError } from '../errors';
+import { parseStrictDate } from '../utils/date';
 
 const SUMMARY_MODULES = [
   'assetProfile',
@@ -135,11 +137,12 @@ function pickFields(source: Record<string, unknown>, fields: string[], always: s
 
 export class YahooFinanceService {
   private readonly yahooFinance: YahooFinanceClient;
+  private readonly queueTimeoutMs: number;
   private static activeCount = 0;
-  private static readonly waiters: Array<() => void> = [];
+  private static readonly waiters: Array<{ resolve: () => void; timer: ReturnType<typeof setTimeout> }> = [];
   private static readonly maxConcurrent = 2;
 
-  constructor(yahooFinance?: YahooFinanceClient) {
+  constructor(yahooFinance?: YahooFinanceClient, queueTimeoutMs = 10_000) {
     this.yahooFinance =
       yahooFinance ??
       (new YahooFinance({
@@ -151,6 +154,7 @@ export class YahooFinanceService {
           },
         },
       }) as unknown as YahooFinanceClient);
+    this.queueTimeoutMs = queueTimeoutMs;
   }
 
   private async enqueue<T>(task: () => Promise<T>): Promise<T> {
@@ -169,20 +173,38 @@ export class YahooFinanceService {
       return Promise.resolve();
     }
 
-    return new Promise<void>((resolve) => {
-      YahooFinanceService.waiters.push(() => {
-        YahooFinanceService.activeCount++;
-        resolve();
-      });
+    return new Promise<void>((resolve, reject) => {
+      const waiter: { resolve: () => void; timer: ReturnType<typeof setTimeout> } = {
+        resolve: () => {
+          clearTimeout(waiter.timer);
+          YahooFinanceService.activeCount++;
+          resolve();
+        },
+        timer: undefined as unknown as ReturnType<typeof setTimeout>,
+      };
+
+      waiter.timer = setTimeout(() => {
+        const index = YahooFinanceService.waiters.indexOf(waiter);
+        if (index !== -1) {
+          YahooFinanceService.waiters.splice(index, 1);
+        }
+        reject(new UpstreamTimeoutError('Timed out waiting for a Yahoo Finance request slot'));
+      }, this.queueTimeoutMs);
+
+      waiter.timer.unref?.();
+      YahooFinanceService.waiters.push(waiter);
     });
   }
 
   private releaseSlot(): void {
-    YahooFinanceService.activeCount--;
     const next = YahooFinanceService.waiters.shift();
     if (next) {
-      next();
+      // Transfer the slot directly to the next waiter.
+      next.resolve();
+      return;
     }
+
+    YahooFinanceService.activeCount = Math.max(0, YahooFinanceService.activeCount - 1);
   }
 
   async getQuotes(request: YahooFinanceQuoteRequest, context: InvocationContext): Promise<YahooQuote | YahooQuote[]> {
@@ -353,14 +375,14 @@ export class YahooFinanceService {
       return { isValid: false, error: 'To date must be in yyyy-MM-dd format' };
     }
 
-    const fromDate = new Date(from);
-    const toDate = new Date(to);
+    const fromDate = parseStrictDate(from);
+    const toDate = parseStrictDate(to);
 
-    if (Number.isNaN(fromDate.getTime())) {
+    if (!fromDate) {
       return { isValid: false, error: 'Invalid from date' };
     }
 
-    if (Number.isNaN(toDate.getTime())) {
+    if (!toDate) {
       return { isValid: false, error: 'Invalid to date' };
     }
 
@@ -559,7 +581,7 @@ export class YahooFinanceService {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(expirationDate)) {
       return 'Expiration date must be in yyyy-MM-dd format';
     }
-    if (Number.isNaN(new Date(expirationDate).getTime())) {
+    if (!parseStrictDate(expirationDate)) {
       return 'Invalid expiration date';
     }
     return undefined;

@@ -85,6 +85,8 @@ describe('yahooFinanceOptionsHandler', () => {
       },
       mockContext,
     );
+    // Options quotes go stale quickly: do not inherit the 24h cache default.
+    expect(mockCacheService.set).toHaveBeenCalledWith(expect.stringMatching(/^options:/), expectedData, 300_000);
   });
 
   it('should return options data with expirationDatesCount', async () => {
