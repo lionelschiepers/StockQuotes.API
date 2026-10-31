@@ -52,3 +52,6 @@ gha-creds-*.json
 
 # Cache
 .cache/
+
+# Dev server state (pid file written by scripts/dev.mjs)
+.dev/

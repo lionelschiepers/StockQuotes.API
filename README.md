@@ -54,10 +54,20 @@ This API serves as a dedicated backend for the [StockQuotes.React](https://githu
     ```bash
     pnpm run build
     ```
-2.  Start the Azure Functions host:
+2.  Start the Azure Functions host and the TypeScript watcher:
     ```bash
     pnpm start
     ```
+
+`pnpm start` runs a small supervisor (`scripts/dev.mjs`) that owns both processes.
+Stop it in any of these ways:
+
+- press `Ctrl+C` in the terminal,
+- type `q` and press Enter,
+- run `pnpm stop` from another terminal (works even if the terminal never delivers Ctrl+C; it uses `.dev/server.pid` and the port owner as a fallback).
+
+The supervisor kills the whole process tree, so `func.exe`, the language worker and
+`tsc --watch` cannot be left running in the background.
 
 The API will then be available at the following endpoints:
 
