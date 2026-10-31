@@ -2,71 +2,13 @@ import type { HttpRequest, HttpResponseInit, InvocationContext } from '@azure/fu
 import { app } from '@azure/functions';
 import { getServiceContainer } from '../di/container';
 import { strictRateLimiter } from '../services/rateLimiter';
-import { cacheService } from '../services/cacheService';
-import { computeETag, matchesETag } from '../utils/etag';
+import { respondWithCache } from '../http/cache';
+import { mapErrorToResponse } from '../http/errors';
+import { enforceRateLimit } from '../http/rateLimit';
+import { parseDelimitedList } from '../http/request';
+import { buildHeaders, JSON_CONTENT_TYPE } from '../http/response';
 
-interface RateLimitResult {
-  allowed: boolean;
-  remaining: number;
-  resetTime: number;
-}
-
-function buildHeaders(rateLimit: RateLimitResult, etag: string, cacheStatus?: 'HIT' | 'MISS') {
-  const headers: Record<string, string> = {
-    'Access-Control-Allow-Origin': '*',
-    'Cache-Control': 'max-age=3600',
-    ETag: etag,
-    'X-RateLimit-Limit': strictRateLimiter.getMaxRequests().toString(),
-    'X-RateLimit-Remaining': rateLimit.remaining.toString(),
-    'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
-  };
-
-  if (cacheStatus) {
-    headers['X-Cache'] = cacheStatus;
-    headers['Content-Type'] = 'application/json';
-  }
-
-  return headers;
-}
-
-function handleHistoricalError(error: unknown, context: InvocationContext): HttpResponseInit {
-  context.error('Error in yahooFinanceHistoricalHandler:', error);
-
-  if (error && typeof error === 'object') {
-    const errObj = error as Record<string, unknown>;
-    if (errObj.response && typeof errObj.response === 'object') {
-      const response = errObj.response as Record<string, unknown>;
-      return {
-        status: (response.status as number) ?? 502,
-        jsonBody: {
-          error: 'External API error',
-          message: (response.statusText as string) ?? 'Unknown error',
-          status: response.status,
-        },
-      };
-    }
-    if (errObj.code === 'ECONNABORTED' || errObj.code === 'ETIMEDOUT') {
-      return {
-        status: 408,
-        jsonBody: { error: 'Request timeout', message: 'External service is not responding' },
-      };
-    }
-    if (errObj.code === 429) {
-      return {
-        status: 429,
-        jsonBody: { error: 'Too Many Requests', message: 'Yahoo Finance rate limit exceeded. Please try again later.' },
-      };
-    }
-  }
-
-  return {
-    status: 500,
-    jsonBody: {
-      error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'An unexpected error occurred',
-    },
-  };
-}
+const CACHE_MAX_AGE_SECONDS = 3600;
 
 export async function yahooFinanceHistoricalHandler(
   request: HttpRequest,
@@ -75,39 +17,23 @@ export async function yahooFinanceHistoricalHandler(
   context.log('HTTP trigger YahooFinanceHistorical launched');
 
   try {
-    const clientIp = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown';
-    const rateLimit = strictRateLimiter.isAllowed(clientIp);
-
+    const rateLimit = enforceRateLimit(request, strictRateLimiter);
     if (!rateLimit.allowed) {
-      return {
-        status: 429,
-        jsonBody: {
-          error: 'Too many requests',
-          message: 'Rate limit exceeded. Please try again later.',
-          retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
-        },
-        headers: {
-          'X-RateLimit-Limit': strictRateLimiter.getMaxRequests().toString(),
-          'X-RateLimit-Remaining': rateLimit.remaining.toString(),
-          'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
-          'Retry-After': Math.ceil((rateLimit.resetTime - Date.now()) / 1000).toString(),
-        },
-      };
+      return rateLimit.response;
     }
 
     const ticker = request.query.get('ticker');
-    const from = request.query.get('from');
-    const to = request.query.get('to');
+    const from = request.query.get('from') ?? '';
+    const to = request.query.get('to') ?? '';
     const interval = request.query.get('interval') ?? undefined;
-    const fieldsParam = request.query.get('fields');
-    const fields = fieldsParam ? fieldsParam.split(/[|,]/).filter((f) => f.length > 0) : undefined;
+    const fields = parseDelimitedList(request.query.get('fields'), /[|,]/);
 
     if (!ticker) {
       return { status: 400, jsonBody: { error: 'Missing required parameter: ticker' } };
     }
 
     const { yahooFinanceService } = getServiceContainer();
-    const validation = yahooFinanceService.validateHistoricalRequest(ticker, from ?? '', to ?? '', interval, fields);
+    const validation = yahooFinanceService.validateHistoricalRequest(ticker, from, to, interval, fields);
     if (!validation.isValid) {
       return { status: 400, jsonBody: { error: validation.error } };
     }
@@ -115,35 +41,30 @@ export async function yahooFinanceHistoricalHandler(
     const today = new Date().toISOString().split('T')[0];
     const sortedFields = fields ? [...fields].sort((a, b) => a.localeCompare(b)).join(',') : 'all';
     const cacheKey = `hist:${today}:${ticker}:${from}:${to}:${interval ?? '1d'}:${sortedFields}`;
-    const incomingEtag = request.headers.get('If-None-Match');
 
-    const cached = cacheService.get<unknown>(cacheKey);
-    if (cached) {
-      const etag = computeETag(cached);
-      if (matchesETag(incomingEtag, cached)) {
-        context.log(`ETag match for ${cacheKey}, returning 304`);
-        return { status: 304, headers: buildHeaders(rateLimit, etag) };
-      }
-      context.log(`Cache hit for ${cacheKey}`);
-      return { jsonBody: cached, headers: buildHeaders(rateLimit, etag, 'HIT') };
-    }
-
-    const data = await yahooFinanceService.getHistoricalData(
-      { ticker, from: from!, to: to!, interval, fields },
+    return await respondWithCache({
+      request,
       context,
-    );
-    cacheService.set(cacheKey, data);
-    context.log(`Cache stored for ${cacheKey}`);
-
-    const etag = computeETag(data);
-    if (matchesETag(incomingEtag, data)) {
-      context.log(`ETag match for ${cacheKey}, returning 304`);
-      return { status: 304, headers: buildHeaders(rateLimit, etag) };
-    }
-
-    return { jsonBody: data, headers: buildHeaders(rateLimit, etag, 'MISS') };
+      cacheKey,
+      fetch: () => yahooFinanceService.getHistoricalData({ ticker, from, to, interval, fields }, context),
+      headers: ({ etag, cacheStatus, hasBody }) =>
+        buildHeaders({
+          limiter: strictRateLimiter,
+          rateLimit: rateLimit.result,
+          maxAgeSeconds: CACHE_MAX_AGE_SECONDS,
+          etag,
+          cacheStatus,
+          contentType: hasBody ? JSON_CONTENT_TYPE : undefined,
+        }),
+    });
   } catch (error: unknown) {
-    return handleHistoricalError(error, context);
+    return mapErrorToResponse(error, context, {
+      logLabel: 'Error in yahooFinanceHistoricalHandler:',
+      fallbackMessage: 'An unexpected error occurred',
+      upstreamMessage: 'Unknown error',
+      timeoutMessage: 'External service is not responding',
+      rateLimitMessage: 'Yahoo Finance rate limit exceeded. Please try again later.',
+    });
   }
 }
 

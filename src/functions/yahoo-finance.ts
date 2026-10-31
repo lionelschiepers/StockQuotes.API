@@ -2,89 +2,26 @@ import type { HttpRequest, HttpResponseInit, InvocationContext } from '@azure/fu
 import { app } from '@azure/functions';
 import { getServiceContainer } from '../di/container';
 import { strictRateLimiter } from '../services/rateLimiter';
+import { respondWithCache } from '../http/cache';
+import { mapErrorToResponse } from '../http/errors';
+import { enforceRateLimit } from '../http/rateLimit';
+import { parseDelimitedList } from '../http/request';
+import { buildHeaders, JSON_CONTENT_TYPE } from '../http/response';
 
-import { cacheService } from '../services/cacheService';
-import { computeETag, matchesETag } from '../utils/etag';
-
-const { yahooFinanceService } = getServiceContainer();
-
-function mapYahooFinanceError(error: unknown): HttpResponseInit {
-  if (error && typeof error === 'object' && 'response' in error) {
-    const axiosError = error as { response?: { status?: number; statusText?: string } };
-    // External API error
-    return {
-      status: axiosError.response?.status ?? 502,
-      jsonBody: {
-        error: 'External API error',
-        message: axiosError.response?.statusText ?? 'Unknown error',
-        status: axiosError.response?.status,
-      },
-    };
-  }
-
-  if (error && typeof error === 'object' && 'code' in error) {
-    const nodeError = error as { code?: string | number };
-    if (nodeError.code === 'ECONNABORTED' || nodeError.code === 'ETIMEDOUT') {
-      // Timeout error
-      return {
-        status: 408,
-        jsonBody: { error: 'Request timeout', message: 'External service is not responding' },
-      };
-    }
-    if (nodeError.code === 429) {
-      return {
-        status: 429,
-        jsonBody: {
-          error: 'Too Many Requests',
-          message: 'Yahoo Finance rate limit exceeded. Please try again later.',
-        },
-      };
-    }
-  }
-
-  const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-  // Internal server error
-  return {
-    status: 500,
-    jsonBody: {
-      error: 'Internal server error',
-      message: errorMessage,
-    },
-  };
-}
+const CACHE_MAX_AGE_SECONDS = 60;
+const CACHE_TTL_MS = 60 * 1000;
 
 // sample call: http://localhost:7071/api/yahoo-finance?symbols=MSFT&fields=regularMarketPrice
 export async function yahooFinanceHandler(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   context.log('HTTP trigger YahooFinance launched');
 
   try {
-    // Extract client IP for rate limiting
-    const clientIp = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown';
-
-    // Apply rate limiting
-    const rateLimitResult = strictRateLimiter.isAllowed(clientIp);
-
-    if (!rateLimitResult.allowed) {
-      return {
-        status: 429,
-        jsonBody: {
-          error: 'Too many requests',
-          message: 'Rate limit exceeded. Please try again later.',
-          retryAfter: Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000),
-        },
-        headers: {
-          'X-RateLimit-Limit': strictRateLimiter.getMaxRequests().toString(),
-          'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-          'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
-          'Retry-After': Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000).toString(),
-        },
-      };
+    const rateLimit = enforceRateLimit(request, strictRateLimiter);
+    if (!rateLimit.allowed) {
+      return rateLimit.response;
     }
 
-    // Validate input parameters
     const symbolsParam = request.query.get('symbols');
-    const fieldsParam = request.query.get('fields');
-
     if (!symbolsParam) {
       return {
         status: 400,
@@ -92,18 +29,10 @@ export async function yahooFinanceHandler(request: HttpRequest, context: Invocat
       };
     }
 
-    const querySymbols = symbolsParam
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    const queryFields = fieldsParam
-      ? fieldsParam
-          .split(',')
-          .map((f) => f.trim())
-          .filter((f) => f.length > 0)
-      : undefined;
+    const querySymbols = parseDelimitedList(symbolsParam) ?? [];
+    const queryFields = parseDelimitedList(request.query.get('fields'));
 
-    // Validate request using service
+    const { yahooFinanceService } = getServiceContainer();
     const validation = yahooFinanceService.validateQuoteRequest(querySymbols, queryFields);
     if (!validation.isValid) {
       return {
@@ -112,58 +41,34 @@ export async function yahooFinanceHandler(request: HttpRequest, context: Invocat
       };
     }
 
-    // Build cache key
     const sortedSymbols = [...querySymbols].sort((a, b) => a.localeCompare(b)).join(',');
     const sortedFields = queryFields ? [...queryFields].sort((a, b) => a.localeCompare(b)).join(',') : 'all';
     const cacheKey = `quotes:${sortedSymbols}:${sortedFields}`;
-    const incomingEtag = request.headers.get('If-None-Match');
 
-    const buildHeaders = (etag: string, cacheStatus?: 'HIT' | 'MISS') => ({
-      'Access-Control-Allow-Origin': '*',
-      ETag: etag,
-      'X-RateLimit-Limit': strictRateLimiter.getMaxRequests().toString(),
-      'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-      'X-RateLimit-Reset': new Date(rateLimitResult.resetTime).toISOString(),
-      ...(cacheStatus
-        ? {
-            'Cache-Control': 'max-age=60',
-            'Content-Type': 'application/json',
-            'X-Cache': cacheStatus,
-          }
-        : {}),
-    });
-
-    // Check Server Cache (60 seconds short timer)
-    const cached = cacheService.get<unknown>(cacheKey);
-    if (cached) {
-      const etag = computeETag(cached);
-      if (matchesETag(incomingEtag, cached)) {
-        context.log(`ETag match for ${cacheKey}, returning 304`);
-        return { status: 304, headers: buildHeaders(etag) };
-      }
-      context.log(`Cache hit for ${cacheKey}`);
-      return { jsonBody: cached, headers: buildHeaders(etag, 'HIT') };
-    }
-
-    const responseMessage = await yahooFinanceService.getQuotes(
-      { symbols: querySymbols, fields: queryFields },
+    return await respondWithCache({
+      request,
       context,
-    );
-
-    // Save in cache with a short TTL (60 seconds)
-    cacheService.set(cacheKey, responseMessage, 60 * 1000);
-    context.log(`Cache stored for ${cacheKey}`);
-
-    const etag = computeETag(responseMessage);
-    if (matchesETag(incomingEtag, responseMessage)) {
-      context.log(`ETag match for ${cacheKey}, returning 304`);
-      return { status: 304, headers: buildHeaders(etag) };
-    }
-
-    return { jsonBody: responseMessage, headers: buildHeaders(etag, 'MISS') };
+      cacheKey,
+      ttlMs: CACHE_TTL_MS,
+      fetch: () => yahooFinanceService.getQuotes({ symbols: querySymbols, fields: queryFields }, context),
+      headers: ({ etag, cacheStatus, hasBody }) =>
+        buildHeaders({
+          limiter: strictRateLimiter,
+          rateLimit: rateLimit.result,
+          maxAgeSeconds: CACHE_MAX_AGE_SECONDS,
+          etag,
+          cacheStatus,
+          contentType: hasBody ? JSON_CONTENT_TYPE : undefined,
+        }),
+    });
   } catch (error: unknown) {
-    context.error('Error in yahooFinanceHandler:', error);
-    return mapYahooFinanceError(error);
+    return mapErrorToResponse(error, context, {
+      logLabel: 'Error in yahooFinanceHandler:',
+      fallbackMessage: 'An unexpected error occurred',
+      upstreamMessage: 'Unknown error',
+      timeoutMessage: 'External service is not responding',
+      rateLimitMessage: 'Yahoo Finance rate limit exceeded. Please try again later.',
+    });
   }
 }
 

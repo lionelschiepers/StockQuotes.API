@@ -1,6 +1,7 @@
 import { statementsHandler } from '../../src/functions/statements';
 import type { HttpRequest, InvocationContext } from '@azure/functions';
 import { getServiceContainer } from '../../src/di/container';
+import { ConfigError, UpstreamRateLimitError } from '../../src/errors';
 import type { AlphaVantageService } from '../../src/services/alphaVantageService';
 import type { CacheService } from '../../src/services/cacheService';
 import { apiRateLimiter } from '../../src/services/rateLimiter';
@@ -256,7 +257,7 @@ describe('statementsHandler', () => {
     it('should handle Alpha Vantage rate limit errors', async () => {
       mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
       mockAlphaVantageService.getFinancialStatements.mockRejectedValue(
-        new Error('Alpha Vantage API rate limit reached'),
+        new UpstreamRateLimitError('Alpha Vantage API rate limit reached'),
       );
 
       const request = mockRequest({ ticker: 'IBM' });
@@ -271,7 +272,7 @@ describe('statementsHandler', () => {
     it('should handle missing API key configuration', async () => {
       mockAlphaVantageService.validateTicker.mockReturnValue({ isValid: true });
       mockAlphaVantageService.getFinancialStatements.mockRejectedValue(
-        new Error('ALPHAVANTAGE_API_KEY environment variable is not set'),
+        new ConfigError('ALPHAVANTAGE_API_KEY environment variable is not set'),
       );
 
       const request = mockRequest({ ticker: 'IBM' });

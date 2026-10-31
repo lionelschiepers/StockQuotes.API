@@ -9,8 +9,6 @@
 #   /api/yahoo-finance-historical?ticker=MSFT&from=2020-01-01&to=2026-02-01&interval=1wk&fields=open,close,low
 #   /api/yahoo-finance-stock-options?ticker=HOOD&filter=puts&limit=8&expirationDatesCount=2
 
-ARG ALPHAVANTAGE_API_KEY=demo
-
 # Build stage
 FROM mcr.microsoft.com/azure-functions/node:4-node24 AS builder
 
@@ -31,8 +29,8 @@ FROM mcr.microsoft.com/azure-functions/node:4-node24
 ENV AzureWebJobsScriptRoot=/home/site/wwwroot
 ENV AzureFunctionsJobHost__Logging__Console__IsEnabled=true
 
-ARG ALPHAVANTAGE_API_KEY
-ENV ALPHAVANTAGE_API_KEY=${ALPHAVANTAGE_API_KEY}
+# ALPHAVANTAGE_API_KEY is intentionally not baked into the image.
+# Supply it at runtime, e.g. `docker run -e ALPHAVANTAGE_API_KEY=...`.
 
 ENV CACHE_ENABLED=true
 ENV CACHE_PERSISTENCE_ENABLED=true
@@ -56,6 +54,6 @@ COPY --from=builder /home/site/wwwroot/host.json ./
 COPY --from=builder /home/site/wwwroot/package.json ./
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-	CMD curl -f http://localhost:80/api/exchange-rate-ecb || exit 1
+	CMD curl -f http://localhost:80/api/health || exit 1
 
 EXPOSE 80

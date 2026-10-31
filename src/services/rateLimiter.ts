@@ -4,7 +4,18 @@ interface RateLimitEntry {
   resetTime: number;
 }
 
-class RateLimiter {
+export interface RateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  resetTime: number;
+}
+
+export interface RateLimiterLike {
+  getMaxRequests(): number;
+  isAllowed(identifier: string): RateLimitResult;
+}
+
+class RateLimiter implements RateLimiterLike {
   private readonly requests: Map<string, RateLimitEntry> = new Map();
   private readonly windowMs: number;
   private readonly maxRequests: number;
@@ -22,7 +33,7 @@ class RateLimiter {
     return this.maxRequests;
   }
 
-  isAllowed(identifier: string): { allowed: boolean; remaining: number; resetTime: number } {
+  isAllowed(identifier: string): RateLimitResult {
     const now = Date.now();
     const entry = this.requests.get(identifier);
 

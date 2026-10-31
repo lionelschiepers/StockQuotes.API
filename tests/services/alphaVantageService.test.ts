@@ -21,7 +21,7 @@ describe('AlphaVantageService', () => {
     process.env = { ...originalEnv, ALPHAVANTAGE_API_KEY: 'test-api-key' };
 
     mockCache = new CacheService();
-    service = new AlphaVantageService(mockCache);
+    service = new AlphaVantageService(mockCache, 0);
 
     (mockContext.log as jest.Mock).mockClear();
     (mockContext.error as jest.Mock).mockClear();
@@ -388,7 +388,7 @@ describe('AlphaVantageService', () => {
 
     it('should throw error when API key is not set', async () => {
       delete process.env.ALPHAVANTAGE_API_KEY;
-      service = new AlphaVantageService(mockCache);
+      service = new AlphaVantageService(mockCache, 0);
 
       await expect(service.getFinancialStatements('IBM', undefined, undefined, undefined, mockContext)).rejects.toThrow(
         'ALPHAVANTAGE_API_KEY environment variable is not set',
@@ -731,7 +731,7 @@ describe('AlphaVantageService', () => {
       it('should use the full data cache for different fields', async () => {
         // Create a fresh service instance for this test
         const freshCache = new CacheService();
-        const freshService = new AlphaVantageService(freshCache);
+        const freshService = new AlphaVantageService(freshCache, 0);
 
         // Setup mocks for first call
         mockedAxios.get

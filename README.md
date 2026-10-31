@@ -63,6 +63,7 @@ The API will then be available at the following endpoints:
 
 - **Yahoo Finance:** `http://localhost:7071/api/yahoo-finance`
 - **ECB Exchange Rates:** `http://localhost:7071/api/exchange-rate-ecb`
+- **Health probe:** `http://localhost:7071/api/health`
 
 ## 🧪 Testing
 
@@ -71,6 +72,10 @@ This project uses [Jest](https://jestjs.io/) for both unit and integration tests
 - Run all tests:
   ```bash
   pnpm test
+  ```
+- Type-check source and tests:
+  ```bash
+  pnpm run typecheck
   ```
 - Run tests in watch mode:
   ```bash

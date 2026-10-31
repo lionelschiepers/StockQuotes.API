@@ -19,7 +19,6 @@ const SUMMARY_MODULES = [
   'incomeStatementHistory',
   'incomeStatementHistoryQuarterly',
   'indexTrend',
-  'industryTrend',
   'insiderHolders',
   'insiderTransactions',
   'institutionOwnership',
@@ -37,7 +36,52 @@ const SUMMARY_MODULES = [
   'upgradeDowngradeHistory',
 ] as const;
 
-const DEFAULT_SUMMARY_MODULES = ['financialData', 'defaultKeyStatistics', 'recommendationTrend'];
+const DEFAULT_SUMMARY_MODULES: readonly string[] = ['financialData', 'defaultKeyStatistics', 'recommendationTrend'];
+
+export type YahooQuote = Record<string, unknown>;
+export type YahooSummary = Record<string, unknown>;
+
+export interface YahooChartResponse {
+  quotes: Array<Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
+export interface OptionsContract {
+  strike: number;
+  [key: string]: unknown;
+}
+
+export interface OptionsChainEntry {
+  expirationDate?: Date;
+  calls?: OptionsContract[];
+  puts?: OptionsContract[];
+  [key: string]: unknown;
+}
+
+export interface OptionsResponse {
+  underlyingSymbol?: string;
+  expirationDates?: Date[];
+  strikes?: number[];
+  hasMiniOptions?: boolean;
+  quote?: { regularMarketPrice?: number; regularMarketDayHigh?: number };
+  options?: OptionsChainEntry[];
+  [key: string]: unknown;
+}
+
+/**
+ * Minimal surface of the yahoo-finance2 client used by this service.
+ * Keeps the service testable without importing the library's full types.
+ */
+export interface YahooFinanceClient {
+  quote(symbols: string[], options?: { fields?: string[] }): Promise<YahooQuote | YahooQuote[]>;
+  chart(ticker: string, options: { period1: string; period2: string; interval: string }): Promise<YahooChartResponse>;
+  quoteSummary(ticker: string, options: { modules: string[] }): Promise<YahooSummary>;
+  options(
+    ticker: string,
+    options: { date?: Date },
+    config?: { validateResult: boolean },
+  ): Promise<OptionsResponse | undefined>;
+}
 
 export interface YahooFinanceQuoteRequest {
   symbols: string[];
@@ -69,18 +113,36 @@ export interface YahooFinanceResponse {
   [key: string]: unknown;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Copies the requested fields that exist on the source, plus any always-included keys. */
+function pickFields(source: Record<string, unknown>, fields: string[], always: string[] = []): Record<string, unknown> {
+  const picked: Record<string, unknown> = {};
+
+  for (const key of always) {
+    picked[key] = source[key];
+  }
+  for (const field of fields) {
+    if (Object.hasOwn(source, field)) {
+      picked[field] = source[field];
+    }
+  }
+
+  return picked;
+}
+
 export class YahooFinanceService {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private readonly yahooFinance: any;
+  private readonly yahooFinance: YahooFinanceClient;
   private static activeCount = 0;
   private static readonly waiters: Array<() => void> = [];
   private static readonly maxConcurrent = 2;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(yahooFinance?: any) {
+  constructor(yahooFinance?: YahooFinanceClient) {
     this.yahooFinance =
       yahooFinance ??
-      new YahooFinance({
+      (new YahooFinance({
         suppressNotices: ['yahooSurvey'],
         fetchOptions: {
           headers: {
@@ -88,15 +150,14 @@ export class YahooFinanceService {
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
           },
         },
-      });
+      }) as unknown as YahooFinanceClient);
   }
 
   private async enqueue<T>(task: () => Promise<T>): Promise<T> {
     await this.acquireSlot();
 
     try {
-      const result = await task();
-      return result;
+      return await task();
     } finally {
       this.releaseSlot();
     }
@@ -124,7 +185,7 @@ export class YahooFinanceService {
     }
   }
 
-  async getQuotes(request: YahooFinanceQuoteRequest, context: InvocationContext): Promise<YahooFinanceResponse> {
+  async getQuotes(request: YahooFinanceQuoteRequest, context: InvocationContext): Promise<YahooQuote | YahooQuote[]> {
     return this.enqueue(async () => {
       try {
         context.log(
@@ -143,26 +204,10 @@ export class YahooFinanceService {
         if (request.fields && request.fields.length > 0) {
           const fields = request.fields;
           if (Array.isArray(response)) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return response.map((quote: any) => {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const filtered: any = { symbol: quote.symbol };
-              fields.forEach((f) => {
-                if (Object.hasOwn(quote, f)) {
-                  filtered[f] = quote[f];
-                }
-              });
-              return filtered;
-            });
-          } else {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const filtered: any = { symbol: response.symbol };
-            fields.forEach((f) => {
-              if (Object.hasOwn(response, f)) {
-                filtered[f] = response[f];
-              }
-            });
-            return filtered;
+            return response.filter(isRecord).map((quote) => pickFields(quote, fields, ['symbol']));
+          }
+          if (isRecord(response)) {
+            return pickFields(response, fields, ['symbol']);
           }
         }
 
@@ -175,8 +220,10 @@ export class YahooFinanceService {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getHistoricalData(request: YahooFinanceHistoricalRequest, context: InvocationContext): Promise<any> {
+  async getHistoricalData(
+    request: YahooFinanceHistoricalRequest,
+    context: InvocationContext,
+  ): Promise<YahooChartResponse> {
     return this.enqueue(async () => {
       try {
         const interval = request.interval === '1w' ? '1wk' : (request.interval ?? '1d');
@@ -195,39 +242,22 @@ export class YahooFinanceService {
           interval,
         });
 
-        if (response?.quotes && Array.isArray(response.quotes)) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          response.quotes = response.quotes.map((quote: any) => {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { adjclose, ...rest } = quote;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const processedQuote: any = {
-              date: rest.date,
-            };
+        if (response.quotes && Array.isArray(response.quotes)) {
+          response.quotes = response.quotes.filter(isRecord).map((quote) => {
+            const { adjclose: _adjclose, ...rest } = quote;
+            const processedQuote: Record<string, unknown> = { date: rest.date };
 
-            const priceFields = ['open', 'high', 'low', 'close'];
-            priceFields.forEach((field) => {
-              if (typeof rest[field] === 'number') {
-                processedQuote[field] = Math.round(rest[field] * 100) / 100;
-              } else {
-                processedQuote[field] = rest[field];
-              }
-            });
+            for (const field of ['open', 'high', 'low', 'close']) {
+              const value = rest[field];
+              processedQuote[field] = typeof value === 'number' ? Math.round(value * 100) / 100 : value;
+            }
 
             if (Object.hasOwn(rest, 'volume')) {
               processedQuote.volume = rest.volume;
             }
 
-            // Filter fields if requested
             if (request.fields && request.fields.length > 0) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const filtered: any = { date: processedQuote.date };
-              request.fields.forEach((f) => {
-                if (Object.hasOwn(processedQuote, f)) {
-                  filtered[f] = processedQuote[f];
-                }
-              });
-              return filtered;
+              return pickFields(processedQuote, request.fields, ['date']);
             }
 
             return processedQuote;
@@ -244,8 +274,7 @@ export class YahooFinanceService {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getQuoteSummary(request: YahooFinanceSummaryRequest, context: InvocationContext): Promise<any> {
+  async getQuoteSummary(request: YahooFinanceSummaryRequest, context: InvocationContext): Promise<YahooSummary> {
     return this.enqueue(async () => {
       try {
         const modules = request.modules && request.modules.length > 0 ? request.modules : [...DEFAULT_SUMMARY_MODULES];
@@ -395,11 +424,14 @@ export class YahooFinanceService {
       return { isValid: false, error: dateValidation.error };
     }
 
-    return this.validateRange(dateValidation.fromDate!, dateValidation.toDate!, interval);
+    if (!dateValidation.fromDate || !dateValidation.toDate) {
+      return { isValid: false, error: 'Invalid date range' };
+    }
+
+    return this.validateRange(dateValidation.fromDate, dateValidation.toDate, interval);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getOptions(request: YahooFinanceOptionsRequest, context: InvocationContext): Promise<any> {
+  async getOptions(request: YahooFinanceOptionsRequest, context: InvocationContext): Promise<OptionsResponse> {
     return this.enqueue(async () => {
       try {
         context.log(`Fetching options for ticker: ${request.ticker}`);
@@ -419,8 +451,7 @@ export class YahooFinanceService {
             0,
             Math.min(request.expirationDatesCount, allExpirationDates.length),
           );
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const allOptions: any[] = [];
+          const allOptions: OptionsChainEntry[] = [];
 
           for (const expDate of datesToFetch) {
             const options: { date: Date } = { date: expDate };
@@ -445,8 +476,7 @@ export class YahooFinanceService {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async fetchOptions(ticker: string, options: { date?: Date }): Promise<any> {
+  private async fetchOptions(ticker: string, options: { date?: Date }): Promise<OptionsResponse> {
     const response = await this.yahooFinance.options(ticker, options, { validateResult: false });
 
     if (!response) {
@@ -463,59 +493,52 @@ export class YahooFinanceService {
     return response;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private applyOptionsFilters(response: any, request: YahooFinanceOptionsRequest): any {
+  private applyOptionsFilters(response: OptionsResponse, request: YahooFinanceOptionsRequest): OptionsResponse {
     const marketPrice = response.quote?.regularMarketPrice ?? response.quote?.regularMarketDayHigh ?? 0;
 
     if (request.filter && request.filter.length > 0 && response.options && Array.isArray(response.options)) {
       const includeCalls = request.filter.includes('calls');
       const includePuts = request.filter.includes('puts');
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      response.options = response.options.map((opt: any) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const filteredOpt: any = {};
-        if (opt.expirationDate) {
-          filteredOpt.expirationDate = opt.expirationDate;
+      response.options = response.options.map((option) => {
+        const filteredOption: OptionsChainEntry = {};
+        if (option.expirationDate) {
+          filteredOption.expirationDate = option.expirationDate;
         }
-        if (includeCalls && opt.calls) {
-          filteredOpt.calls = opt.calls;
+        if (includeCalls && option.calls) {
+          filteredOption.calls = option.calls;
         }
-        if (includePuts && opt.puts) {
-          filteredOpt.puts = opt.puts;
+        if (includePuts && option.puts) {
+          filteredOption.puts = option.puts;
         }
-        return filteredOpt;
+        return filteredOption;
       });
     }
 
     if (request.limit && request.limit > 0 && marketPrice > 0 && response.options && Array.isArray(response.options)) {
       const limit = request.limit;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      response.options = response.options.map((opt: any) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const limitedOpt: any = {};
-        if (opt.expirationDate) {
-          limitedOpt.expirationDate = opt.expirationDate;
+      response.options = response.options.map((option) => {
+        const limitedOption: OptionsChainEntry = {};
+        if (option.expirationDate) {
+          limitedOption.expirationDate = option.expirationDate;
         }
 
-        if (opt.calls && opt.calls.length > 0) {
-          const validCalls = opt.calls.filter(
-            (call: { strike: number }) => typeof call.strike === 'number' && call.strike > marketPrice,
+        if (option.calls && option.calls.length > 0) {
+          const validCalls = option.calls.filter(
+            (call) => typeof call.strike === 'number' && call.strike > marketPrice,
           );
-          validCalls.sort((a: { strike: number }, b: { strike: number }) => a.strike - b.strike);
-          limitedOpt.calls = validCalls.slice(0, limit);
+          validCalls.sort((a, b) => a.strike - b.strike);
+          limitedOption.calls = validCalls.slice(0, limit);
         }
 
-        if (opt.puts && opt.puts.length > 0) {
-          const validPuts = opt.puts.filter(
-            (put: { strike: number }) => typeof put.strike === 'number' && put.strike < marketPrice,
-          );
-          validPuts.sort((a: { strike: number }, b: { strike: number }) => b.strike - a.strike);
-          limitedOpt.puts = validPuts.slice(0, limit);
+        if (option.puts && option.puts.length > 0) {
+          const validPuts = option.puts.filter((put) => typeof put.strike === 'number' && put.strike < marketPrice);
+          validPuts.sort((a, b) => b.strike - a.strike);
+          limitedOption.puts = validPuts.slice(0, limit);
         }
 
-        return limitedOpt;
+        return limitedOption;
       });
     }
 

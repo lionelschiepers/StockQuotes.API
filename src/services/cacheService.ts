@@ -9,8 +9,7 @@ interface CacheEntry<T> {
 }
 
 export class CacheService {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private readonly cache: Map<string, CacheEntry<any>>;
+  private readonly cache: Map<string, CacheEntry<unknown>>;
   private readonly ttlMs: number;
   private readonly enabled: boolean;
   private readonly persistenceEnabled: boolean;

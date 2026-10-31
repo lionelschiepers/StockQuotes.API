@@ -64,6 +64,3 @@ export class ExchangeRateService {
     return { isValid: true };
   }
 }
-
-// Export singleton instance
-export const exchangeRateService = new ExchangeRateService();

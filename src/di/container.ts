@@ -15,7 +15,7 @@ const container: ServiceContainer = {
   yahooFinanceService: new YahooFinanceService(),
   exchangeRateService: new ExchangeRateService(cacheService),
   alphaVantageService: new AlphaVantageService(cacheService),
-  cacheService: cacheService,
+  cacheService,
 };
 
 export function getServiceContainer(): ServiceContainer {

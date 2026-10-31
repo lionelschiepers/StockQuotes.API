@@ -1,7 +1,21 @@
 import axios from 'axios';
 import type { InvocationContext } from '@azure/functions';
+import {
+  AppError,
+  BadRequestError,
+  ConfigError,
+  UpstreamError,
+  UpstreamRateLimitError,
+  UpstreamTimeoutError,
+} from '../errors';
 import type { CacheService } from './cacheService';
 import { cacheService } from './cacheService';
+
+type AlphaVantageFunction = 'INCOME_STATEMENT' | 'BALANCE_SHEET' | 'CASH_FLOW' | 'EARNINGS';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
 
 // Alpha Vantage API response interfaces
 interface AlphaVantageStatementResponse {
@@ -54,11 +68,13 @@ export class AlphaVantageService {
   private readonly baseUrl: string;
   private readonly cache: CacheService;
   private readonly timeout: number = 10000; // 10 seconds
+  private readonly requestDelayMs: number;
 
-  constructor(cache: CacheService = cacheService) {
+  constructor(cache: CacheService = cacheService, requestDelayMs = 1100) {
     this.apiKey = process.env.ALPHAVANTAGE_API_KEY ?? '';
     this.baseUrl = 'https://www.alphavantage.co/query';
     this.cache = cache;
+    this.requestDelayMs = requestDelayMs;
   }
 
   async getFinancialStatements(
@@ -74,7 +90,7 @@ export class AlphaVantageService {
     // Validate ticker
     const validation = this.validateTicker(normalizedTicker);
     if (!validation.isValid) {
-      throw new Error(validation.error);
+      throw new BadRequestError(validation.error ?? 'Invalid ticker symbol');
     }
 
     // Build cache key for this ticker and date
@@ -218,35 +234,39 @@ export class AlphaVantageService {
     context.log(`Fetching financial statements for ${ticker} from Alpha Vantage`);
 
     if (!this.apiKey) {
-      throw new Error('ALPHAVANTAGE_API_KEY environment variable is not set');
+      throw new ConfigError('ALPHAVANTAGE_API_KEY environment variable is not set');
     }
 
     try {
       // Free tier Alpha Vantage API limit: 1 request per second
       // Make sequential requests with delay to respect rate limit
-      const incomeResponse = await this.fetchStatement(ticker, 'INCOME_STATEMENT', context);
+      const incomeResponse = await this.fetchEndpoint<AlphaVantageStatementResponse>(
+        'INCOME_STATEMENT',
+        ticker,
+        context,
+      );
 
       // Wait 1000ms before next request (stays under 1 req/sec limit)
-      await this.delay(1100);
-      const balanceResponse = await this.fetchStatement(ticker, 'BALANCE_SHEET', context);
+      await this.delay(this.requestDelayMs);
+      const balanceResponse = await this.fetchEndpoint<AlphaVantageStatementResponse>('BALANCE_SHEET', ticker, context);
 
       // Wait 1000ms before next request
-      await this.delay(1100);
-      const cashFlowResponse = await this.fetchStatement(ticker, 'CASH_FLOW', context);
+      await this.delay(this.requestDelayMs);
+      const cashFlowResponse = await this.fetchEndpoint<AlphaVantageStatementResponse>('CASH_FLOW', ticker, context);
 
       // Wait 1000ms before next request
-      await this.delay(1100);
-      const earningsResponse = await this.fetchEarnings(ticker, context);
+      await this.delay(this.requestDelayMs);
+      const earningsResponse = await this.fetchEndpoint<AlphaVantageEarningsResponse>('EARNINGS', ticker, context);
 
       // Validate responses
       if (!this.isValidResponse(incomeResponse)) {
-        throw new Error('Invalid income statement response from Alpha Vantage');
+        throw new UpstreamError('Invalid income statement response from Alpha Vantage');
       }
       if (!this.isValidResponse(balanceResponse)) {
-        throw new Error('Invalid balance sheet response from Alpha Vantage');
+        throw new UpstreamError('Invalid balance sheet response from Alpha Vantage');
       }
       if (!this.isValidResponse(cashFlowResponse)) {
-        throw new Error('Invalid cash flow response from Alpha Vantage');
+        throw new UpstreamError('Invalid cash flow response from Alpha Vantage');
       }
 
       // Merge reports
@@ -277,17 +297,17 @@ export class AlphaVantageService {
     }
   }
 
-  private async fetchStatement(
+  private async fetchEndpoint<T extends { symbol?: string }>(
+    functionName: AlphaVantageFunction,
     ticker: string,
-    function_name: string,
     context: InvocationContext,
-  ): Promise<AlphaVantageStatementResponse> {
-    const url = `${this.baseUrl}?function=${function_name}&symbol=${ticker}&apikey=${this.apiKey}`;
+  ): Promise<T> {
+    const url = `${this.baseUrl}?function=${functionName}&symbol=${ticker}&apikey=${this.apiKey}`;
 
-    context.log(`Fetching ${function_name} for ${ticker}`);
+    context.log(`Fetching ${functionName} for ${ticker}`);
 
     try {
-      const response = await axios.get<AlphaVantageStatementResponse>(url, {
+      const response = await axios.get<T & { Note?: string; Information?: string }>(url, {
         timeout: this.timeout,
         headers: {
           Accept: 'application/json',
@@ -296,22 +316,26 @@ export class AlphaVantageService {
 
       // Check for API limit reached or other errors
       if (response.data && 'Note' in response.data) {
-        throw new Error('Alpha Vantage API rate limit reached');
+        throw new UpstreamRateLimitError('Alpha Vantage API rate limit reached');
       }
 
       if (response.data && 'Information' in response.data) {
-        throw new Error(`Alpha Vantage API error: ${(response.data as Record<string, string>).Information}`);
+        throw new UpstreamError(`Alpha Vantage API error: ${response.data.Information}`);
       }
 
       return response.data;
     } catch (error: unknown) {
+      if (error instanceof AppError) {
+        throw error;
+      }
       if (axios.isAxiosError(error)) {
         if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-          throw new Error(`Timeout fetching ${function_name} for ${ticker}`);
+          throw new UpstreamTimeoutError(`Timeout fetching ${functionName} for ${ticker}`);
         }
         if (error.response) {
-          throw new Error(
-            `Alpha Vantage API error for ${function_name}: ${error.response.status} - ${error.response.statusText}`,
+          throw new UpstreamError(
+            `Alpha Vantage API error for ${functionName}: ${error.response.status} - ${error.response.statusText}`,
+            error.response.status,
           );
         }
       }
@@ -319,50 +343,8 @@ export class AlphaVantageService {
     }
   }
 
-  private isValidResponse(response: AlphaVantageStatementResponse): boolean {
-    return response && typeof response === 'object' && 'symbol' in response;
-  }
-
-  private isValidEarningsResponse(response: AlphaVantageEarningsResponse): boolean {
-    return response && typeof response === 'object' && 'symbol' in response;
-  }
-
-  private async fetchEarnings(ticker: string, context: InvocationContext): Promise<AlphaVantageEarningsResponse> {
-    const url = `${this.baseUrl}?function=EARNINGS&symbol=${ticker}&apikey=${this.apiKey}`;
-
-    context.log(`Fetching EARNINGS for ${ticker}`);
-
-    try {
-      const response = await axios.get<AlphaVantageEarningsResponse>(url, {
-        timeout: this.timeout,
-        headers: {
-          Accept: 'application/json',
-        },
-      });
-
-      // Check for API limit reached or other errors
-      if (response.data && 'Note' in response.data) {
-        throw new Error('Alpha Vantage API rate limit reached');
-      }
-
-      if (response.data && 'Information' in response.data) {
-        throw new Error(`Alpha Vantage API error: ${(response.data as Record<string, string>).Information}`);
-      }
-
-      return response.data;
-    } catch (error: unknown) {
-      if (axios.isAxiosError(error)) {
-        if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-          throw new Error(`Timeout fetching EARNINGS for ${ticker}`);
-        }
-        if (error.response) {
-          throw new Error(
-            `Alpha Vantage API error for EARNINGS: ${error.response.status} - ${error.response.statusText}`,
-          );
-        }
-      }
-      throw error;
-    }
+  private isValidResponse(response: unknown): response is AlphaVantageStatementResponse {
+    return isRecord(response) && 'symbol' in response;
   }
 
   private buildReportMap<T extends { fiscalDateEnding: string }>(reports: T[]): Map<string, T> {
@@ -452,6 +434,3 @@ export class AlphaVantageService {
     return { isValid: true };
   }
 }
-
-// Export singleton instance
-export const alphaVantageService = new AlphaVantageService();
